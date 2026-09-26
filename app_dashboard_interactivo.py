@@ -283,17 +283,19 @@ st.markdown("""
     .delta-pos { background: #E6F9F0; color: #00B894; }
     .delta-neg { background: #FEECEC; color: #E17055; }
 
+    /* Tarjetas de Gráficos y Tablas */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border-radius: 22px !important;
         border: 1px solid #ECEFF2 !important;
         box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.03) !important;
-        padding: 14px !important;
+        padding: 16px !important;
     }
 
     button[data-baseweb="tab"] {
         font-weight: 700;
         color: #7A828A;
+        font-size: 13.5px;
     }
     button[aria-selected="true"] {
         color: #1A1D20 !important;
@@ -347,7 +349,6 @@ def load_data_from_drive(file_id, sheet_name=0):
     df.columns = [str(c).strip().lower() for c in df.columns]
     return df
 
-# Guardar Ventas
 def save_ventas_to_drive(file_id, df_to_save):
     service = get_drive_service()
     request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
@@ -426,7 +427,6 @@ def save_ventas_to_drive(file_id, df_to_save):
     media = MediaIoBaseUpload(out_buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', resumable=True)
     service.files().update(fileId=file_id, media_body=media, supportsAllDrives=True).execute()
 
-# Guardar Inventario
 def save_inventario_to_drive(file_id, df_to_save):
     service = get_drive_service()
     request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
@@ -539,7 +539,6 @@ if modulo_activo == "📈 Módulo Comercial (Ventas)":
         st.error(f"Error al conectar con Google Drive (Ventas): {e}")
         st.stop()
 
-    # Sanitización de datos
     if 'fecha' in df.columns:
         df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce').dt.strftime('%Y-%m-%d')
     df['cantidad'] = df['cantidad'].apply(clean_val).astype(int) if 'cantidad' in df.columns else 0
@@ -558,39 +557,50 @@ if modulo_activo == "📈 Módulo Comercial (Ventas)":
     </div>
     """, unsafe_allow_html=True)
 
-    tab_dash, tab_edit = st.tabs(["📊 Dashboard de Ventas", "✏️ Editor de Base de Datos"])
+    # --- PESTAÑAS: GENERAL vs ANÁLISIS DETALLADO vs EDITOR ---
+    tab_dash, tab_analisis, tab_edit = st.tabs([
+        "📊 Dashboard General (KPIs)",
+        "🔍 Análisis Detallado de Ventas",
+        "✏️ Editor de Base de Datos"
+    ])
 
+    # FILTROS EN SIDEBAR (Comunes para ambas vistas de análisis)
+    st.sidebar.markdown("<h3 style='color:#FFFFFF; font-weight:800;'>Filtros de Ventas</h3>", unsafe_allow_html=True)
+    ciudades = ["Todas"] + sorted([c for c in df["ciudad"].dropna().unique().tolist() if str(c).strip()]) if "ciudad" in df.columns else ["Todas"]
+    ciudad_sel = st.sidebar.selectbox("Ciudad:", ciudades)
+
+    categorias = ["Todas"] + sorted([c for c in df["categoria"].dropna().unique().tolist() if str(c).strip()]) if "categoria" in df.columns else ["Todas"]
+    cat_sel = st.sidebar.selectbox("Categoría:", categorias)
+
+    estados = ["Todos"] + sorted([c for c in df["estado"].dropna().unique().tolist() if str(c).strip()]) if "estado" in df.columns else ["Todos"]
+    estado_sel = st.sidebar.selectbox("Estado de Orden:", estados)
+
+    with st.sidebar.expander("🎯 Metas Comerciales"):
+        factor_meta = st.slider("Crecimiento Objetivo vs Período Anterior:", 5, 50, 15, 5, format="%d%%") / 100
+
+    if st.sidebar.button("🔄 Actualizar Ventas", help="Refresca los datos en memoria"):
+        st.cache_data.clear()
+        st.rerun()
+
+    # DataFrame Filtrado
+    df_f = df.copy()
+    if ciudad_sel != "Todas" and "ciudad" in df_f.columns:
+        df_f = df_f[df_f["ciudad"] == ciudad_sel]
+    if cat_sel != "Todas" and "categoria" in df_f.columns:
+        df_f = df_f[df_f["categoria"] == cat_sel]
+    if estado_sel != "Todos" and "estado" in df_f.columns:
+        df_f = df_f[df_f["estado"] == estado_sel]
+
+    # Cálculos globales
+    total_ventas = float(df_f["total_venta"].sum())
+    total_unidades = int(df_f["cantidad"].sum())
+    num_ordenes = len(df_f)
+    ticket_medio = (total_ventas / num_ordenes) if num_ordenes > 0 else 0.0
+
+    # --------------------------------------------------------------------------
+    # --- PESTAÑA 1: DASHBOARD GENERAL (KPIs y Matriz 3x2) ---
+    # --------------------------------------------------------------------------
     with tab_dash:
-        st.sidebar.markdown("<h3 style='color:#FFFFFF; font-weight:800;'>Filtros de Ventas</h3>", unsafe_allow_html=True)
-        ciudades = ["Todas"] + sorted([c for c in df["ciudad"].dropna().unique().tolist() if str(c).strip()]) if "ciudad" in df.columns else ["Todas"]
-        ciudad_sel = st.sidebar.selectbox("Ciudad:", ciudades)
-
-        categorias = ["Todas"] + sorted([c for c in df["categoria"].dropna().unique().tolist() if str(c).strip()]) if "categoria" in df.columns else ["Todas"]
-        cat_sel = st.sidebar.selectbox("Categoría:", categorias)
-
-        estados = ["Todos"] + sorted([c for c in df["estado"].dropna().unique().tolist() if str(c).strip()]) if "estado" in df.columns else ["Todos"]
-        estado_sel = st.sidebar.selectbox("Estado de Orden:", estados)
-
-        with st.sidebar.expander("🎯 Metas Comerciales"):
-            factor_meta = st.slider("Crecimiento Objetivo vs Período Anterior:", 5, 50, 15, 5, format="%d%%") / 100
-
-        if st.sidebar.button("🔄 Actualizar Ventas", help="Refresca los datos en memoria"):
-            st.cache_data.clear()
-            st.rerun()
-
-        df_f = df.copy()
-        if ciudad_sel != "Todas" and "ciudad" in df_f.columns:
-            df_f = df_f[df_f["ciudad"] == ciudad_sel]
-        if cat_sel != "Todas" and "categoria" in df_f.columns:
-            df_f = df_f[df_f["categoria"] == cat_sel]
-        if estado_sel != "Todos" and "estado" in df_f.columns:
-            df_f = df_f[df_f["estado"] == estado_sel]
-
-        total_ventas = float(df_f["total_venta"].sum())
-        total_unidades = int(df_f["cantidad"].sum())
-        num_ordenes = len(df_f)
-        ticket_medio = (total_ventas / num_ordenes) if num_ordenes > 0 else 0.0
-
         try:
             df_fechas = df_f.dropna(subset=['fecha']).copy()
             df_fechas['dt'] = pd.to_datetime(df_fechas['fecha'], errors='coerce')
@@ -746,6 +756,193 @@ if modulo_activo == "📈 Módulo Comercial (Ventas)":
                 else:
                     st.info("Sin registros.")
 
+    # --------------------------------------------------------------------------
+    # --- PESTAÑA 2: ANÁLISIS DETALLADO DE VENTAS (TABLAS Y PROFUNDIDAD) ---
+    # --------------------------------------------------------------------------
+    with tab_analisis:
+        st.markdown("""
+        <div style='background: #FFFFFF; padding: 18px 24px; border-radius: 18px; border: 1px solid #ECEFF2; margin-bottom: 20px; box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.02);'>
+            <h3 style='margin:0; color:#1A1D20; font-weight:800;'>🔍 Análisis Analítico de Rendimiento y Clientes</h3>
+            <p style='color:#7A828A; font-size:13px; margin-top:4px;'>Profundiza en la cartera de clientes, concentración geográfica cruzada y dispersión de precios.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if len(df_f) > 0:
+            # 1. Mini-KPIs de hallazgos
+            top_cli_nom = df_f.groupby("cliente")["total_venta"].sum().idxmax() if "cliente" in df_f.columns else "N/A"
+            top_cli_val = df_f.groupby("cliente")["total_venta"].sum().max() if "cliente" in df_f.columns else 0.0
+
+            top_prod_nom = df_f.groupby("producto")["total_venta"].sum().idxmax() if "producto" in df_f.columns else "N/A"
+            top_prod_val = df_f.groupby("producto")["total_venta"].sum().max() if "producto" in df_f.columns else 0.0
+
+            top_ciu_nom = df_f.groupby("ciudad")["total_venta"].sum().idxmax() if "ciudad" in df_f.columns else "N/A"
+            top_ciu_val = df_f.groupby("ciudad")["total_venta"].sum().max() if "ciudad" in df_f.columns else 0.0
+
+            prom_unidades_orden = df_f["cantidad"].mean()
+
+            ak1, ak2, ak3, ak4 = st.columns(4)
+            with ak1:
+                st.markdown(f"""
+                <div class="kpi-card" style="min-height: 110px;">
+                    <span class="kpi-label">🏆 Cliente N° 1</span>
+                    <span style="font-size:18px; font-weight:800; color:#1A1D20; margin-top:4px;">{top_cli_nom}</span>
+                    <span style="font-size:12px; color:#FFB800; font-weight:700;">${top_cli_val:,.2f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with ak2:
+                st.markdown(f"""
+                <div class="kpi-card" style="min-height: 110px;">
+                    <span class="kpi-label">⭐ Producto Estrella</span>
+                    <span style="font-size:18px; font-weight:800; color:#1A1D20; margin-top:4px;">{top_prod_nom}</span>
+                    <span style="font-size:12px; color:#FF7A00; font-weight:700;">${top_prod_val:,.2f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with ak3:
+                st.markdown(f"""
+                <div class="kpi-card" style="min-height: 110px;">
+                    <span class="kpi-label">📍 Plaza Principal</span>
+                    <span style="font-size:18px; font-weight:800; color:#1A1D20; margin-top:4px;">{top_ciu_nom}</span>
+                    <span style="font-size:12px; color:#1E2229; font-weight:700;">${top_ciu_val:,.2f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with ak4:
+                st.markdown(f"""
+                <div class="kpi-card" style="min-height: 110px;">
+                    <span class="kpi-label">📦 Unidades / Orden</span>
+                    <span style="font-size:22px; font-weight:800; color:#1A1D20; margin-top:4px;">{prom_unidades_orden:.1f}</span>
+                    <span style="font-size:12px; color:#6C5CE7; font-weight:700;">Promedio físico</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.write("")
+
+            # 2. FILA DE CLIENTES: GRÁFICO RANKING + TABLA DINÁMICA
+            ac1, ac2 = st.columns([1, 1.2])
+
+            with ac1:
+                with st.container(border=True):
+                    # Gráfico Top 10 Clientes
+                    if "cliente" in df_f.columns:
+                        v_cli = df_f.groupby("cliente", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=True).tail(10)
+                        fig_cli = px.bar(
+                            v_cli,
+                            x="total_venta",
+                            y="cliente",
+                            orientation="h",
+                            text="total_venta",
+                            color_discrete_sequence=["#1E2229"],
+                            labels={"total_venta": "Facturación ($)", "cliente": ""}
+                        )
+                        fig_cli = estilizar_figura(fig_cli, "Ranking: Top 10 Clientes por Facturación")
+                        fig_cli.update_traces(
+                            texttemplate='$%{text:,.0f}',
+                            textposition='outside',
+                            textfont=dict(color="#1A1D20", size=10, family="Plus Jakarta Sans")
+                        )
+                        max_cli = v_cli["total_venta"].max()
+                        fig_cli.update_xaxes(range=[0, max_cli * 1.30])
+                        st.plotly_chart(fig_cli, width="stretch", theme=None)
+
+            with ac2:
+                with st.container(border=True):
+                    # Tabla Resumen de Clientes
+                    st.markdown("<b style='color:#1A1D20; font-size:14px;'>📋 Matriz de Desempeño por Cliente</b>", unsafe_allow_html=True)
+                    st.caption("Detalle de volumen, ticket promedio y porcentaje de aportación al negocio.")
+                    
+                    if "cliente" in df_f.columns:
+                        tabla_cli = df_f.groupby("cliente").agg(
+                            Ordenes=("id_transaccion", "count"),
+                            Unidades=("cantidad", "sum"),
+                            Total_Venta=("total_venta", "sum"),
+                            Ticket_Medio=("total_venta", "mean")
+                        ).reset_index()
+
+                        # % sobre el total filtrado
+                        sum_tot = tabla_cli["Total_Venta"].sum()
+                        tabla_cli["Participacion"] = (tabla_cli["Total_Venta"] / sum_tot) * 100 if sum_tot > 0 else 0
+                        tabla_cli = tabla_cli.sort_values("Total_Venta", ascending=False)
+
+                        st.dataframe(
+                            tabla_cli,
+                            column_config={
+                                "cliente": st.column_config.TextColumn("Cliente"),
+                                "Ordenes": st.column_config.NumberColumn("Órdenes", format="%d"),
+                                "Unidades": st.column_config.NumberColumn("Unidades", format="%d"),
+                                "Total_Venta": st.column_config.NumberColumn("Total Facturado", format="$ %,.2f"),
+                                "Ticket_Medio": st.column_config.NumberColumn("Ticket Medio", format="$ %,.2f"),
+                                "Participacion": st.column_config.ProgressColumn("Participación %", format="%.1f%%", min_value=0, max_value=100)
+                            },
+                            hide_index=True,
+                            width="stretch",
+                            height=380
+                        )
+
+            # 3. FILA DE MATRIZ CRUZADA (HEATMAP) + DISPERSIÓN DE PRECIOS (BOXPLOT)
+            st.write("")
+            ah1, ah2 = st.columns(2)
+
+            with ah1:
+                with st.container(border=True):
+                    # Heatmap Cruzado Ciudad vs Categoría
+                    if "ciudad" in df_f.columns and "categoria" in df_f.columns:
+                        pivot_cc = df_f.pivot_table(index="ciudad", columns="categoria", values="total_venta", aggfunc="sum", fill_value=0)
+                        fig_heat = px.imshow(
+                            pivot_cc,
+                            text_auto="$,.0f",
+                            aspect="auto",
+                            color_continuous_scale=[[0, "#FFFFFF"], [0.4, "#FFF3CD"], [0.8, "#FFB800"], [1, "#1E2229"]],
+                            labels=dict(x="Categoría", y="Ciudad", color="Facturación ($)")
+                        )
+                        fig_heat = estilizar_figura(fig_heat, "Mapa de Calor: Facturación Cruzada (Ciudad vs Categoría)")
+                        fig_heat.update_xaxes(side="bottom")
+                        st.plotly_chart(fig_heat, width="stretch", theme=None)
+                    else:
+                        st.info("Sin columnas para generar el mapa de calor.")
+
+            with ah2:
+                with st.container(border=True):
+                    # Boxplot de dispersión de precios unitarios
+                    if "categoria" in df_f.columns and "precio_unitario" in df_f.columns:
+                        fig_box = px.box(
+                            df_f,
+                            x="categoria",
+                            y="precio_unitario",
+                            color="categoria",
+                            points="all",
+                            color_discrete_sequence=PALETA_COLORES,
+                            labels={"precio_unitario": "Precio Unitario ($)", "categoria": "Categoría"}
+                        )
+                        fig_box = estilizar_figura(fig_box, "Dispersión de Precios Unitarios por Categoría (Boxplot)")
+                        fig_box.update_layout(showlegend=False)
+                        st.plotly_chart(fig_box, width="stretch", theme=None)
+                    else:
+                        st.info("Sin registros de precios.")
+
+            # 4. TABLA AUDITABLE DETALLE LÍNEA POR LÍNEA
+            st.write("")
+            with st.container(border=True):
+                st.markdown("<b style='color:#1A1D20; font-size:15px;'>🔎 Explorador Maestro de Transacciones Filtradas</b>", unsafe_allow_html=True)
+                st.caption(f"Mostrando {len(df_f)} transacciones que coinciden con los filtros del panel lateral.")
+                
+                cols_mostrar = [c for c in ["id_transaccion", "fecha", "cliente", "ciudad", "categoria", "producto", "cantidad", "precio_unitario", "total_venta", "estado"] if c in df_f.columns]
+                st.dataframe(
+                    df_f[cols_mostrar],
+                    column_config={
+                        "precio_unitario": st.column_config.NumberColumn("Precio ($)", format="$ %,.2f"),
+                        "total_venta": st.column_config.NumberColumn("Total ($)", format="$ %,.2f"),
+                        "cantidad": st.column_config.NumberColumn("Cantidad", format="%d"),
+                        "fecha": st.column_config.DateColumn("Fecha", format="YYYY-MM-DD")
+                    },
+                    hide_index=True,
+                    width="stretch",
+                    height=320
+                )
+        else:
+            st.info("No hay datos disponibles para los filtros seleccionados.")
+
+    # --------------------------------------------------------------------------
+    # --- PESTAÑA 3: EDITOR DE BASE DE DATOS ---
+    # --------------------------------------------------------------------------
     with tab_edit:
         st.markdown("<h3 style='margin:0; color:#1A1D20; font-weight:800;'>Editor Directo: Ventas</h3><p style='color:#7A828A; font-size:13px;'>Modifica valores en la tabla. Las fórmulas se sincronizan en Google Drive.</p>", unsafe_allow_html=True)
         df_editado = st.data_editor(df, num_rows="dynamic", width="stretch", hide_index=True, disabled=["total_venta"])
@@ -775,7 +972,6 @@ else:
         st.error(f"Error al conectar con Google Drive (Inventario): {e}")
         st.stop()
 
-    # Sanitización de datos de inventario
     df_inv['stock_actual'] = df_inv['stock_actual'].apply(clean_val).astype(int) if 'stock_actual' in df_inv.columns else 0
     df_inv['stock_minimo'] = df_inv['stock_minimo'].apply(clean_val).astype(int) if 'stock_minimo' in df_inv.columns else 0
     df_inv['stock_maximo'] = df_inv['stock_maximo'].apply(clean_val).astype(int) if 'stock_maximo' in df_inv.columns else 0
@@ -784,7 +980,6 @@ else:
     mask_inv = (df_inv['valor_inventario'] == 0)
     df_inv.loc[mask_inv, 'valor_inventario'] = df_inv.loc[mask_inv, 'stock_actual'] * df_inv.loc[mask_inv, 'costo_unitario']
 
-    # Banner Superior
     st.markdown("""
     <div class="dashboard-header">
         <div class="dashboard-title-box">
@@ -814,7 +1009,6 @@ else:
             st.cache_data.clear()
             st.rerun()
 
-        # Filtrar datos
         df_inv_f = df_inv.copy()
         if alm_sel != "Todos" and "almacen" in df_inv_f.columns:
             df_inv_f = df_inv_f[df_inv_f["almacen"] == alm_sel]
@@ -823,7 +1017,6 @@ else:
         if est_inv_sel != "Todos" and "estado_stock" in df_inv_f.columns:
             df_inv_f = df_inv_f[df_inv_f["estado_stock"] == est_inv_sel]
 
-        # KPIs de Inventario
         val_total_stock = float(df_inv_f["valor_inventario"].sum())
         total_items_stock = int(df_inv_f["stock_actual"].sum())
         items_criticos = int(len(df_inv_f[df_inv_f["estado_stock"].astype(str).str.contains("Crítico|Bajo", case=False, na=False)]))
@@ -841,25 +1034,17 @@ else:
 
         st.write("")
 
-        # =====================================================================
-        # --- MATRIZ 3x2 DE INVENTARIOS ---
-        # =====================================================================
+        # MATRIZ 3x2 DE INVENTARIOS
         i1_c1, i1_c2 = st.columns(2)
-
         with i1_c1:
             with st.container(border=True):
-                # 1. DISPERSIÓN MULTIDIMENSIONAL DE INVENTARIO
                 if len(df_inv_f) > 0:
                     fig_disp_inv = px.scatter(
-                        df_inv_f,
-                        x="stock_actual",
-                        y="costo_unitario",
-                        size="valor_inventario",
+                        df_inv_f, x="stock_actual", y="costo_unitario", size="valor_inventario",
                         color="categoria" if "categoria" in df_inv_f.columns else None,
                         hover_name="producto" if "producto" in df_inv_f.columns else None,
                         hover_data=["almacen", "estado_stock", "valor_inventario"] if "almacen" in df_inv_f.columns else ["valor_inventario"],
-                        color_discrete_sequence=PALETA_COLORES,
-                        size_max=32,
+                        color_discrete_sequence=PALETA_COLORES, size_max=32,
                         labels={"stock_actual": "Stock Físico Disponible", "costo_unitario": "Costo de Adquisición ($)", "categoria": "Categoría", "valor_inventario": "Valorización ($)"}
                     )
                     fig_disp_inv = estilizar_figura(fig_disp_inv, "1. Dispersión 4D de Stock (Unidades vs Costo vs Valor Total)")
@@ -869,17 +1054,13 @@ else:
 
         with i1_c2:
             with st.container(border=True):
-                # 2. TREEMAP JERÁRQUICO DE ALMACENES
                 if len(df_inv_f) > 0 and all(c in df_inv_f.columns for c in ["almacen", "categoria", "producto"]):
                     df_tree_inv = df_inv_f.copy()
                     for c in ["almacen", "categoria", "producto"]:
                         df_tree_inv[c] = df_tree_inv[c].fillna("S/D").astype(str)
                     fig_tree_inv = px.treemap(
-                        df_tree_inv,
-                        path=["almacen", "categoria", "producto"],
-                        values="valor_inventario",
-                        color="categoria",
-                        color_discrete_sequence=PALETA_COLORES
+                        df_tree_inv, path=["almacen", "categoria", "producto"], values="valor_inventario",
+                        color="categoria", color_discrete_sequence=PALETA_COLORES
                     )
                     fig_tree_inv = estilizar_figura(fig_tree_inv, "2. Treemap de Inventario (Almacén ➔ Categoría ➔ Producto)")
                     fig_tree_inv.update_traces(textinfo="label+value+percent entry", texttemplate="<b>%{label}</b><br>$%{value:,.0f}")
@@ -888,10 +1069,8 @@ else:
                     st.info("Sin registros.")
 
         i2_c1, i2_c2 = st.columns(2)
-
         with i2_c1:
             with st.container(border=True):
-                # 3. PARETO 80/20 DE CAPITAL INMOVILIZADO
                 if "producto" in df_inv_f.columns and len(df_inv_f) > 0:
                     v_inv_prod = df_inv_f.groupby("producto", as_index=False)["valor_inventario"].sum().sort_values("valor_inventario", ascending=False).head(10)
                     v_inv_prod["cum_sum"] = v_inv_prod["valor_inventario"].cumsum()
@@ -911,14 +1090,10 @@ else:
 
         with i2_c2:
             with st.container(border=True):
-                # 4. SALUD DEL STOCK (DONUT)
                 if "estado_stock" in df_inv_f.columns and len(df_inv_f) > 0:
                     v_est_inv = df_inv_f.groupby("estado_stock", as_index=False)["valor_inventario"].sum()
                     fig_donut_inv = px.pie(
-                        v_est_inv,
-                        values="valor_inventario",
-                        names="estado_stock",
-                        hole=0.62,
+                        v_est_inv, values="valor_inventario", names="estado_stock", hole=0.62,
                         color_discrete_sequence=["#00B894", "#E17055", "#FF7A00", "#FFB800"]
                     )
                     fig_donut_inv = estilizar_figura(fig_donut_inv, "4. Distribución de Salud del Stock")
@@ -928,15 +1103,12 @@ else:
                     st.info("Sin registros.")
 
         i3_c1, i3_c2 = st.columns(2)
-
         with i3_c1:
             with st.container(border=True):
-                # 5. DIAGRAMA DE FLUJO SANKEY (ALMACÉN -> CATEGORÍA -> ESTADO DE STOCK)
                 if len(df_inv_f) > 0 and all(c in df_inv_f.columns for c in ["almacen", "categoria", "estado_stock"]):
                     alms_list = list(df_inv_f["almacen"].dropna().unique())
                     cats_list = list(df_inv_f["categoria"].dropna().unique())
                     ests_list = list(df_inv_f["estado_stock"].dropna().unique())
-
                     all_inv_nodes = alms_list + cats_list + ests_list
                     inv_node_indices = {name: i for i, name in enumerate(all_inv_nodes)}
 
@@ -959,13 +1131,10 @@ else:
 
         with i3_c2:
             with st.container(border=True):
-                # 6. RADAR POLAR 360° POR ALMACÉN
                 if "almacen" in df_inv_f.columns and len(df_inv_f) > 0:
                     df_radar_alm = df_inv_f.groupby("almacen").agg(
-                        valor=("valor_inventario", "sum"),
-                        unidades=("stock_actual", "sum"),
-                        skus=("sku", "count"),
-                        seguridad=("stock_minimo", "sum")
+                        valor=("valor_inventario", "sum"), unidades=("stock_actual", "sum"),
+                        skus=("sku", "count"), seguridad=("stock_minimo", "sum")
                     ).reset_index()
 
                     m_inv = ["valor", "unidades", "skus", "seguridad"]
