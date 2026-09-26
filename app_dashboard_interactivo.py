@@ -7,6 +7,7 @@ from openpyxl.utils import get_column_letter
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+import plotly.express as px
 
 # --- Configuración visual ---
 st.set_page_config(
@@ -99,7 +100,6 @@ def save_data_to_drive(file_id, df_to_save):
     """Actualiza el Excel conservando formato, estilos, anchos de columna y fórmulas."""
     service = get_drive_service()
     
-    # Descargar el libro actual para no perder hojas adicionales (como Dashboard_Resumen)
     request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
     fh = io.BytesIO()
     downloader = MediaIoBaseDownload(fh, request)
@@ -113,19 +113,16 @@ def save_data_to_drive(file_id, df_to_save):
     except Exception:
         wb = openpyxl.Workbook()
 
-    # Seleccionar o crear la hoja Ventas
     if "Ventas" in wb.sheetnames:
         ws = wb["Ventas"]
-        ws.delete_rows(1, ws.max_row + 10)  # Limpiar contenido anterior
+        ws.delete_rows(1, ws.max_row + 10)
     else:
         ws = wb.active
         ws.title = "Ventas"
 
-    # Encabezados
     cols = ["id_transaccion", "fecha", "cliente", "ciudad", "categoria", "producto", "cantidad", "precio_unitario", "total_venta", "estado"]
     ws.append(cols)
 
-    # Estilos del encabezado (Azul oscuro corporativo + texto blanco negrita)
     header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
     header_alignment = Alignment(horizontal="center", vertical="center")
@@ -136,7 +133,6 @@ def save_data_to_drive(file_id, df_to_save):
         cell.font = header_font
         cell.alignment = header_alignment
 
-    # Bordes sutiles para las filas
     thin_border = Border(
         left=Side(style='thin', color='E0E0E0'),
         right=Side(style='thin', color='E0E0E0'),
@@ -144,11 +140,10 @@ def save_data_to_drive(file_id, df_to_save):
         bottom=Side(style='thin', color='E0E0E0')
     )
 
-    # Insertar filas con fórmulas y formatos
     for row_idx, (_, row) in enumerate(df_to_save.iterrows(), start=2):
         cant = int(clean_val(row.get('cantidad', 0)))
         precio = float(clean_val(row.get('precio_unitario', 0.0)))
-        formula_total = f"=G{row_idx}*H{row_idx}"  # Columna G (cantidad) * Columna H (precio)
+        formula_total = f"=G{row_idx}*H{row_idx}"
         
         row_values = [
             str(row.get('id_transaccion', f"TRX-{row_idx-1:04d}")),
@@ -164,7 +159,6 @@ def save_data_to_drive(file_id, df_to_save):
         ]
         ws.append(row_values)
 
-        # Formato numérico y de moneda
         ws.cell(row=row_idx, column=7).number_format = '#,##0'
         ws.cell(row=row_idx, column=8).number_format = '$#,##0.00'
         ws.cell(row=row_idx, column=9).number_format = '$#,##0.00'
@@ -175,13 +169,11 @@ def save_data_to_drive(file_id, df_to_save):
             if c_i in (1, 2, 10):
                 c_cell.alignment = Alignment(horizontal="center")
 
-    # Ajuste automático del ancho de columnas para que no se encima nada
     for col in ws.columns:
         col_letter = get_column_letter(col[0].column)
         max_len = max(len(str(c.value or '')) for c in col)
         ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
-    # Guardar en buffer y subir a Google Drive
     out_buf = io.BytesIO()
     wb.save(out_buf)
     out_buf.seek(0)
@@ -241,7 +233,7 @@ with tab_dash:
     if estado_sel != "Todos" and "estado" in df_f.columns:
         df_f = df_f[df_f["estado"] == estado_sel]
 
-    # KPIs
+    # KPIs superiores
     k1, k2, k3, k4 = st.columns(4)
     total_ventas = float(df_f["total_venta"].sum())
     total_unidades = int(df_f["cantidad"].sum())
@@ -255,23 +247,90 @@ with tab_dash:
 
     st.markdown("---")
 
-    # Gráficos
-    c_g1, c_g2 = st.columns(2)
-    with c_g1:
-        st.subheader("Ventas por Categoría")
+    # ========================================================
+    # --- MATRIZ DE 6 GRÁFICOS (3 FILAS X 2 COLUMNAS) ---
+    # ========================================================
+
+    # --- FILA 1 ---
+    f1_col1, f1_col2 = st.columns(2)
+
+    with f1_col1:
+        st.subheader("1. Dispersión Multidimensional")
+        if len(df_f) > 0:
+            # Gráfico multidimensional:
+            # X: Cantidad | Y: Precio Unitario | Tamaño: Total Venta | Color: Categoría | Hover: Producto y Cliente
+            fig_multi = px.scatter(
+                df_f,
+                x="cantidad",
+                y="precio_unitario",
+                size="total_venta",
+                color="categoria" if "categoria" in df_f.columns else None,
+                hover_name="producto" if "producto" in df_f.columns else None,
+                hover_data=["cliente", "total_venta"] if "cliente" in df_f.columns else ["total_venta"],
+                size_max=35,
+                title="Relación Cantidad vs Precio (Tamaño: Monto Total)",
+                labels={
+                    "cantidad": "Unidades por Orden",
+                    "precio_unitario": "Precio Unitario ($)",
+                    "categoria": "Categoría",
+                    "total_venta": "Venta Total ($)"
+                }
+            )
+            fig_multi.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10))
+            st.plotly_chart(fig_multi, width="stretch")
+        else:
+            st.info("Sin datos para renderizar la dispersión.")
+
+    with f1_col2:
+        st.subheader("2. Ventas por Categoría")
         if "categoria" in df_f.columns and len(df_f) > 0:
-            ventas_cat = df_f.groupby("categoria")["total_venta"].sum()
-            st.bar_chart(ventas_cat)
+            ventas_cat = df_f.groupby("categoria", as_index=False)["total_venta"].sum()
+            fig_cat = px.bar(
+                ventas_cat,
+                x="categoria",
+                y="total_venta",
+                text_auto=".2s",
+                labels={"total_venta": "Ingresos ($)", "categoria": "Categoría"}
+            )
+            fig_cat.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10))
+            st.plotly_chart(fig_cat, width="stretch")
         else:
             st.info("Sin datos para mostrar.")
 
-    with c_g2:
-        st.subheader("Ventas por Ciudad")
+    # --- FILA 2 ---
+    f2_col1, f2_col2 = st.columns(2)
+
+    with f2_col1:
+        st.subheader("3. Ventas por Ciudad")
         if "ciudad" in df_f.columns and len(df_f) > 0:
-            ventas_ciudad = df_f.groupby("ciudad")["total_venta"].sum()
-            st.bar_chart(ventas_ciudad)
+            ventas_ciudad = df_f.groupby("ciudad", as_index=False)["total_venta"].sum()
+            fig_ciudad = px.bar(
+                ventas_ciudad,
+                x="ciudad",
+                y="total_venta",
+                color="ciudad",
+                labels={"total_venta": "Ingresos ($)", "ciudad": "Ciudad"}
+            )
+            fig_ciudad.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10), showlegend=False)
+            st.plotly_chart(fig_ciudad, width="stretch")
         else:
             st.info("Sin datos para mostrar.")
+
+    with f2_col2:
+        st.subheader("4. Gráfico de Sección 4")
+        st.info("Espacio disponible para tu cuarto gráfico (ej. Tendencia temporal o Top Clientes).")
+
+    # --- FILA 3 ---
+    f3_col1, f3_col2 = st.columns(2)
+
+    with f3_col1:
+        st.subheader("5. Gráfico de Sección 5")
+        st.info("Espacio disponible para tu quinto gráfico (ej. Distribución por Estado de orden).")
+
+    with f3_col2:
+        st.subheader("6. Gráfico de Sección 6")
+        st.info("Espacio disponible para tu sexto gráfico (ej. Matriz de rendimiento o Pareto).")
+
 
 with tab_edit:
     st.subheader("📝 Edición directa en la Base de Datos")
@@ -280,7 +339,7 @@ with tab_edit:
     df_editado = st.data_editor(
         df,
         num_rows="dynamic",
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         disabled=["total_venta"]
     )
