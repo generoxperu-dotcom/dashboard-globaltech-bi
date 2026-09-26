@@ -9,10 +9,11 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # --- 1. CONFIGURACIÓN VISUAL GENERAL ---
 st.set_page_config(
-    page_title="Dashboard de Ventas",
+    page_title="Management Dashboard | GlobalTech",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -45,7 +46,7 @@ def clean_val(v):
         return 0.0
 
 def render_kpi_card(titulo, val_act, val_ant, val_meta, badge_txt, badge_class, fill_class, es_moneda=False):
-    """Genera el HTML compacto de las tarjetas KPI sin sangrías conflictivas."""
+    """Genera el HTML compacto de las tarjetas KPI sin indentaciones conflictivas."""
     if es_moneda:
         txt_actual = f"${val_act:,.2f}"
         txt_meta = f"${val_meta:,.2f}"
@@ -79,39 +80,39 @@ def render_kpi_card(titulo, val_act, val_ant, val_meta, badge_txt, badge_class, 
     )
 
 def estilizar_figura(fig, titulo=""):
-    """Configura los gráficos con tipografía limpia y ejes oscuros de alto contraste."""
+    """Formato común de alto contraste para que números y ejes sean 100% legibles."""
     fig.update_layout(
         template="plotly_white",
         title=dict(
             text=f"<b>{titulo}</b>",
             font=dict(size=14, color="#1A1D20", family="Plus Jakarta Sans"),
             x=0.02,
-            y=0.95
+            y=0.96
         ),
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#FFFFFF",
-        margin=dict(l=25, r=35, t=55, b=35),
-        font=dict(family="Plus Jakarta Sans", color="#1A1D20", size=12),
+        margin=dict(l=25, r=25, t=55, b=25),
+        font=dict(family="Plus Jakarta Sans", color="#1A1D20", size=11),
         legend=dict(
             orientation="h",
             yanchor="bottom",
             y=1.02,
             xanchor="right",
             x=1,
-            font=dict(size=11, color="#1A1D20")
+            font=dict(size=10, color="#1A1D20")
         )
     )
     fig.update_xaxes(
-        tickfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans"),
-        title_font=dict(color="#1A1D20", size=12, family="Plus Jakarta Sans"),
+        tickfont=dict(color="#1A1D20", size=10, family="Plus Jakarta Sans"),
+        title_font=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans"),
         gridcolor="#F0F2F5",
         zeroline=False,
         showline=True,
         linecolor="#E2E8F0"
     )
     fig.update_yaxes(
-        tickfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans"),
-        title_font=dict(color="#1A1D20", size=12, family="Plus Jakarta Sans"),
+        tickfont=dict(color="#1A1D20", size=10, family="Plus Jakarta Sans"),
+        title_font=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans"),
         gridcolor="#F0F2F5",
         zeroline=False,
         showline=True,
@@ -137,11 +138,10 @@ st.markdown("""
         padding-bottom: 2.5rem;
     }
 
-    /* Ocultar marcas y menús innecesarios sin romper la barra de herramientas */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /* Asegurar que el botón de reapertura de la barra lateral (Sidebar) sea visible y elegante */
+    /* Flecha reapertura de sidebar */
     header[data-testid="stHeader"] {
         background: transparent !important;
     }
@@ -263,7 +263,6 @@ st.markdown("""
     .fill-orange { background: linear-gradient(90deg, #FF7A00, #FF5500); }
     .fill-purple { background: linear-gradient(90deg, #6C5CE7, #805AD5); }
 
-    /* Pie de Tarjeta KPI */
     .kpi-bottom {
         display: flex;
         align-items: center;
@@ -289,16 +288,10 @@ st.markdown("""
         align-items: center;
         white-space: nowrap;
     }
-    .delta-pos {
-        background: #E6F9F0;
-        color: #00B894;
-    }
-    .delta-neg {
-        background: #FEECEC;
-        color: #E17055;
-    }
+    .delta-pos { background: #E6F9F0; color: #00B894; }
+    .delta-neg { background: #FEECEC; color: #E17055; }
 
-    /* Tarjetas de Gráficos de la Matriz */
+    /* Contenedores de Gráficos */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border-radius: 22px !important;
@@ -513,7 +506,6 @@ with tab_dash:
     estado_sel = st.sidebar.selectbox("Estado de Orden:", estados)
 
     st.sidebar.markdown("---")
-    
     with st.sidebar.expander("🎯 Configuración de Metas"):
         factor_meta = st.slider("Crecimiento Objetivo vs Período Anterior:", min_value=5, max_value=50, value=15, step=5, format="%d%%") / 100
 
@@ -521,7 +513,7 @@ with tab_dash:
         st.cache_data.clear()
         st.rerun()
 
-    # Filtrar
+    # Filtrar DataFrame
     df_f = df.copy()
     if ciudad_sel != "Todas" and "ciudad" in df_f.columns:
         df_f = df_f[df_f["ciudad"] == ciudad_sel]
@@ -536,7 +528,7 @@ with tab_dash:
     num_ordenes = len(df_f)
     ticket_medio = (total_ventas / num_ordenes) if num_ordenes > 0 else 0.0
 
-    # Estimación del período anterior según la columna 'fecha'
+    # Estimación período anterior
     try:
         df_fechas = df_f.dropna(subset=['fecha']).copy()
         df_fechas['dt'] = pd.to_datetime(df_fechas['fecha'], errors='coerce')
@@ -560,7 +552,6 @@ with tab_dash:
         ticket_ant = ticket_medio * 0.95
         ordenes_ant = int(num_ordenes * 0.92)
 
-    # Cálculo de los Objetivos (Metas)
     meta_ventas = ventas_ant * (1 + factor_meta) if ventas_ant > 0 else total_ventas * 1.15
     meta_unidades = int(unidades_ant * (1 + factor_meta)) if unidades_ant > 0 else int(total_unidades * 1.15)
     meta_ticket = ticket_ant * (1 + (factor_meta * 0.6)) if ticket_ant > 0 else ticket_medio * 1.08
@@ -579,17 +570,17 @@ with tab_dash:
 
     st.write("")
 
-    # ========================================================
-    # --- MATRIZ 3X2 DE GRÁFICOS PERSONALIZADOS ---
-    # ========================================================
+    # =========================================================================
+    # --- MATRIZ 3X2 DE GRÁFICOS AVANZADOS (INSPIRADOS EN LAS PRESENTACIONES) ---
+    # =========================================================================
 
-    # --- FILA 1 ---
+    # --------------------------- FILA 1 ---------------------------
     r1_c1, r1_c2 = st.columns(2)
 
     with r1_c1:
         with st.container(border=True):
+            # 1. DISPERSIÓN MULTIDIMENSIONAL 4D/5D
             if len(df_f) > 0:
-                # 1. DISPERSIÓN MULTIDIMENSIONAL
                 fig_disp = px.scatter(
                     df_f,
                     x="cantidad",
@@ -607,43 +598,100 @@ with tab_dash:
                         "total_venta": "Monto Total ($)"
                     }
                 )
-                fig_disp = estilizar_figura(fig_disp, "1. Dispersión Multidimensional (Precio vs Volumen)")
+                fig_disp = estilizar_figura(fig_disp, "1. Dispersión Multidimensional 4D (Volumen vs Precio)")
                 st.plotly_chart(fig_disp, width="stretch", theme=None)
             else:
                 st.info("Sin registros.")
 
     with r1_c2:
         with st.container(border=True):
-            # 2. FACTURACIÓN POR CATEGORÍA
-            if "categoria" in df_f.columns and len(df_f) > 0:
-                v_cat = df_f.groupby("categoria", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=True)
-                fig_cat = px.bar(
-                    v_cat,
-                    x="total_venta",
-                    y="categoria",
-                    orientation="h",
-                    text="total_venta",
-                    color_discrete_sequence=["#FFB800"],
-                    labels={"total_venta": "Total Facturado ($)", "categoria": "Categoría"}
-                )
-                fig_cat = estilizar_figura(fig_cat, "2. Facturación por Categoría de Producto")
-                fig_cat.update_traces(
-                    texttemplate='$%{text:,.2f}',
-                    textposition='outside',
-                    textfont=dict(color="#1A1D20", size=12, family="Plus Jakarta Sans")
-                )
-                max_val = v_cat["total_venta"].max()
-                fig_cat.update_xaxes(range=[0, max_val * 1.25])
-                st.plotly_chart(fig_cat, width="stretch", theme=None)
-            else:
-                st.info("Sin registros.")
+            # 2. TREEMAP JERÁRQUICO MULTICAPA
+            if len(df_f) > 0 and all(c in df_f.columns for c in ["ciudad", "categoria", "producto"]):
+                df_tree = df_f.copy()
+                for c in ["ciudad", "categoria", "producto"]:
+                    df_tree[c] = df_tree[c].fillna("S/D").astype(str)
 
-    # --- FILA 2 ---
+                fig_tree = px.treemap(
+                    df_tree,
+                    path=["ciudad", "categoria", "producto"],
+                    values="total_venta",
+                    color="categoria",
+                    color_discrete_sequence=PALETA_COLORES
+                )
+                fig_tree = estilizar_figura(fig_tree, "2. Treemap Jerárquico (Ciudad ➔ Categoría ➔ Producto)")
+                fig_tree.update_traces(
+                    textinfo="label+value+percent entry",
+                    texttemplate="<b>%{label}</b><br>$%{value:,.0f}",
+                    textfont=dict(size=11, family="Plus Jakarta Sans")
+                )
+                st.plotly_chart(fig_tree, width="stretch", theme=None)
+            else:
+                st.info("Sin registros suficientes para armar jerarquía.")
+
+    # --------------------------- FILA 2 ---------------------------
     r2_c1, r2_c2 = st.columns(2)
 
     with r2_c1:
         with st.container(border=True):
-            # 3. TENDENCIA TEMPORAL
+            # 3. DIAGRAMA DE PARETO 80/20 (TOP PRODUCTOS CLAVE)
+            if "producto" in df_f.columns and len(df_f) > 0:
+                v_prod = df_f.groupby("producto", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=False).head(10)
+                v_prod["cum_sum"] = v_prod["total_venta"].cumsum()
+                total_pareto = v_prod["total_venta"].sum()
+                v_prod["cum_pct"] = (v_prod["cum_sum"] / total_pareto) * 100
+
+                fig_pareto = make_subplots(specs=[[{"secondary_y": True}]])
+                
+                # Barras de Ventas
+                fig_pareto.add_trace(
+                    go.Bar(
+                        x=v_prod["producto"],
+                        y=v_prod["total_venta"],
+                        name="Ventas ($)",
+                        marker_color="#FFB800",
+                        text=v_prod["total_venta"],
+                        texttemplate="$%{text:,.0f}",
+                        textposition="outside",
+                        textfont=dict(size=10, color="#1A1D20")
+                    ),
+                    secondary_y=False
+                )
+                
+                # Línea acumulada
+                fig_pareto.add_trace(
+                    go.Scatter(
+                        x=v_prod["producto"],
+                        y=v_prod["cum_pct"],
+                        name="% Acumulado",
+                        mode="lines+markers",
+                        line=dict(color="#1E2229", width=3),
+                        marker=dict(size=6, color="#FF7A00")
+                    ),
+                    secondary_y=True
+                )
+
+                # Línea guía de corte al 80%
+                fig_pareto.add_hline(
+                    y=80,
+                    line_dash="dot",
+                    line_color="#E17055",
+                    line_width=2,
+                    annotation_text="Regla 80%",
+                    annotation_position="top right",
+                    secondary_y=True
+                )
+
+                fig_pareto = estilizar_figura(fig_pareto, "3. Diagrama de Pareto 80/20 (Top Productos)")
+                fig_pareto.update_yaxes(title_text="Ventas ($)", secondary_y=False, showgrid=True, gridcolor="#F0F2F5")
+                fig_pareto.update_yaxes(title_text="% Acumulado", range=[0, 110], secondary_y=True, showgrid=False)
+                fig_pareto.update_xaxes(tickangle=-25)
+                st.plotly_chart(fig_pareto, width="stretch", theme=None)
+            else:
+                st.info("Sin registros de productos.")
+
+    with r2_c2:
+        with st.container(border=True):
+            # 4. TENDENCIA HISTÓRICA DE VENTAS
             if "fecha" in df_f.columns and len(df_f) > 0:
                 v_tiempo = df_f.groupby("fecha", as_index=False)["total_venta"].sum().sort_values("fecha")
                 fig_line = px.line(
@@ -655,7 +703,7 @@ with tab_dash:
                     markers=True,
                     labels={"total_venta": "Ingresos ($)", "fecha": "Fecha"}
                 )
-                fig_line = estilizar_figura(fig_line, "3. Tendencia Histórica de Ventas")
+                fig_line = estilizar_figura(fig_line, "4. Tendencia Histórica de Ventas")
                 fig_line.update_traces(
                     line=dict(width=3, shape="spline"),
                     marker=dict(size=7, color="#1E2229"),
@@ -667,83 +715,113 @@ with tab_dash:
             else:
                 st.info("Sin registros de fecha.")
 
-    with r2_c2:
-        with st.container(border=True):
-            # 4. DISTRIBUCIÓN POR ESTADO
-            if "estado" in df_f.columns and len(df_f) > 0:
-                v_est = df_f.groupby("estado", as_index=False)["total_venta"].sum()
-                fig_donut = px.pie(
-                    v_est,
-                    values="total_venta",
-                    names="estado",
-                    hole=0.62,
-                    color_discrete_sequence=["#FFB800", "#1E2229", "#FF7A00", "#6C5CE7"]
-                )
-                fig_donut = estilizar_figura(fig_donut, "4. Distribución por Estado de Orden")
-                fig_donut.update_traces(
-                    textinfo="label+percent",
-                    textfont=dict(size=12, color="#FFFFFF"),
-                    insidetextorientation="horizontal"
-                )
-                st.plotly_chart(fig_donut, width="stretch", theme=None)
-            else:
-                st.info("Sin registros de estado.")
-
-    # --- FILA 3 ---
+    # --------------------------- FILA 3 ---------------------------
     r3_c1, r3_c2 = st.columns(2)
 
     with r3_c1:
         with st.container(border=True):
-            # 5. TOP CIUDADES
-            if "ciudad" in df_f.columns and len(df_f) > 0:
-                v_ciu = df_f.groupby("ciudad", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=False).head(5)
-                fig_ciu = px.bar(
-                    v_ciu,
-                    x="ciudad",
-                    y="total_venta",
-                    text="total_venta",
-                    color="ciudad",
-                    color_discrete_sequence=PALETA_COLORES,
-                    labels={"total_venta": "Ingresos ($)", "ciudad": "Ciudad"}
+            # 5. DIAGRAMA DE FLUJO SANKEY (CIUDAD -> CATEGORÍA -> ESTADO)
+            if len(df_f) > 0 and all(c in df_f.columns for c in ["ciudad", "categoria", "estado"]):
+                ciudades_list = list(df_f["ciudad"].dropna().unique())
+                categorias_list = list(df_f["categoria"].dropna().unique())
+                estados_list = list(df_f["estado"].dropna().unique())
+
+                all_nodes = ciudades_list + categorias_list + estados_list
+                node_indices = {name: i for i, name in enumerate(all_nodes)}
+
+                # Enlace 1: Ciudad -> Categoría
+                df_l1 = df_f.groupby(["ciudad", "categoria"], as_index=False)["total_venta"].sum()
+                # Enlace 2: Categoría -> Estado
+                df_l2 = df_f.groupby(["categoria", "estado"], as_index=False)["total_venta"].sum()
+
+                srcs = [node_indices[c] for c in df_l1["ciudad"]] + [node_indices[cat] for cat in df_l2["categoria"]]
+                tgts = [node_indices[cat] for cat in df_l1["categoria"]] + [node_indices[est] for est in df_l2["estado"]]
+                vals = list(df_l1["total_venta"]) + list(df_l2["total_venta"])
+
+                # Paleta de colores para los nodos por etapa
+                node_colors = (
+                    ["#FFB800"] * len(ciudades_list) +
+                    ["#1E2229"] * len(categorias_list) +
+                    ["#6C5CE7"] * len(estados_list)
                 )
-                fig_ciu = estilizar_figura(fig_ciu, "5. Top 5 Ciudades por Desempeño")
-                fig_ciu.update_traces(
-                    texttemplate='$%{text:,.2f}',
-                    textposition='outside',
-                    textfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans")
-                )
-                max_c = v_ciu["total_venta"].max()
-                fig_ciu.update_yaxes(range=[0, max_c * 1.22])
-                fig_ciu.update_layout(showlegend=False)
-                st.plotly_chart(fig_ciu, width="stretch", theme=None)
+
+                fig_sankey = go.Figure(data=[go.Sankey(
+                    node=dict(
+                        pad=15,
+                        thickness=18,
+                        line=dict(color="#ECEFF2", width=1),
+                        label=all_nodes,
+                        color=node_colors
+                    ),
+                    link=dict(
+                        source=srcs,
+                        target=tgts,
+                        value=vals,
+                        color="rgba(255, 184, 0, 0.28)"
+                    )
+                )])
+                fig_sankey = estilizar_figura(fig_sankey, "5. Diagrama de Flujo Sankey (Ciudad ➔ Categoría ➔ Estado)")
+                st.plotly_chart(fig_sankey, width="stretch", theme=None)
             else:
-                st.info("Sin registros de ciudad.")
+                st.info("Sin registros suficientes para el diagrama de flujo.")
 
     with r3_c2:
         with st.container(border=True):
-            # 6. VOLUMEN DE UNIDADES
+            # 6. RADAR / ARAÑA POLAR MULTICRITERIO 360°
             if "categoria" in df_f.columns and len(df_f) > 0:
-                v_comb = df_f.groupby("categoria", as_index=False)["cantidad"].sum().sort_values("cantidad", ascending=False)
-                fig_comb = px.bar(
-                    v_comb,
-                    x="categoria",
-                    y="cantidad",
-                    text="cantidad",
-                    color_discrete_sequence=["#1E2229"],
-                    labels={"cantidad": "Unidades Vendidas", "categoria": "Categoría"}
-                )
-                fig_comb = estilizar_figura(fig_comb, "6. Volumen de Unidades por Categoría")
-                fig_comb.update_traces(
-                    texttemplate='%{text:,} und',
-                    textposition='outside',
-                    textfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans")
-                )
-                max_u = v_comb["cantidad"].max()
-                fig_comb.update_yaxes(range=[0, max_u * 1.22])
-                st.plotly_chart(fig_comb, width="stretch", theme=None)
-            else:
-                st.info("Sin registros.")
+                df_radar = df_f.groupby("categoria").agg(
+                    ventas=("total_venta", "sum"),
+                    unidades=("cantidad", "sum"),
+                    ordenes=("id_transaccion", "count"),
+                    ticket=("total_venta", "mean")
+                ).reset_index()
 
+                metricas = ["ventas", "unidades", "ordenes", "ticket"]
+                nombres_ejes = ["Facturación ($)", "Unidades", "Nº Órdenes", "Ticket Medio"]
+
+                # Normalización 0-100 para comparar en la misma escala
+                for m in metricas:
+                    max_val = df_radar[m].max()
+                    df_radar[m + "_norm"] = (df_radar[m] / max_val * 100) if max_val > 0 else 0
+
+                fig_radar = go.Figure()
+                for idx, cat_name in enumerate(df_radar["categoria"].unique()):
+                    row = df_radar[df_radar["categoria"] == cat_name].iloc[0]
+                    valores_radar = [row[m + "_norm"] for m in metricas]
+                    valores_radar.append(valores_radar[0])  # Cerrar la figura polar
+                    ejes_cerrados = nombres_ejes + [nombres_ejes[0]]
+
+                    color_cat = PALETA_COLORES[idx % len(PALETA_COLORES)]
+                    fig_radar.add_trace(go.Scatterpolar(
+                        r=valores_radar,
+                        theta=ejes_cerrados,
+                        fill='toself',
+                        name=str(cat_name),
+                        line=dict(color=color_cat, width=2.5),
+                        opacity=0.65
+                    ))
+
+                fig_radar = estilizar_figura(fig_radar, "6. Radar Polar Multicriterio 360° por Categoría")
+                fig_radar.update_layout(
+                    polar=dict(
+                        radialaxis=dict(
+                            visible=True,
+                            range=[0, 105],
+                            tickfont=dict(size=9, color="#7A828A"),
+                            gridcolor="#F0F2F5"
+                        ),
+                        angularaxis=dict(
+                            tickfont=dict(size=11, color="#1A1D20", family="Plus Jakarta Sans"),
+                            linecolor="#E2E8F0"
+                        ),
+                        bgcolor="#FFFFFF"
+                    )
+                )
+                st.plotly_chart(fig_radar, width="stretch", theme=None)
+            else:
+                st.info("Sin registros para el análisis polar.")
+
+# --- 8. PESTAÑA: EDITOR DE BASE DE DATOS ---
 with tab_edit:
     st.markdown("""
     <div style='background: white; padding: 20px; border-radius: 18px; border: 1px solid #ECEFF2; margin-bottom: 20px;'>
