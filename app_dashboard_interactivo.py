@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 
 # --- 1. CONFIGURACIÓN VISUAL GENERAL ---
 st.set_page_config(
-    page_title="Management Dashboard | GlobalTech",
+    page_title="Dashboard de Ventas",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
