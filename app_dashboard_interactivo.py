@@ -23,7 +23,6 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-    /* Fuente global y fondo general de la app */
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
@@ -32,18 +31,16 @@ st.markdown("""
         background-color: #F5F7FA;
     }
 
-    /* Reducir espacio superior */
     .block-container {
         padding-top: 1.8rem;
         padding-bottom: 2.5rem;
     }
 
-    /* Ocultar barra superior y marca de agua */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Banner de Encabezado Superior */
+    /* Banner Superior */
     .dashboard-header {
         background: #FFFFFF;
         padding: 22px 28px;
@@ -58,21 +55,21 @@ st.markdown("""
     .dashboard-title-box h1 {
         font-size: 26px;
         font-weight: 800;
-        color: #1A1D20;
+        color: #1A1D20 !important;
         margin: 0;
         letter-spacing: -0.5px;
     }
     .dashboard-title-box span {
-        color: #FFB800;
+        color: #FFB800 !important;
     }
     .dashboard-subtitle {
-        color: #7A828A;
+        color: #7A828A !important;
         font-size: 13px;
         font-weight: 500;
         margin-top: 4px;
     }
 
-    /* Tarjetas KPI con diseño tipo píldora */
+    /* Tarjetas KPI */
     .kpi-card {
         background: #FFFFFF;
         padding: 18px 20px;
@@ -91,14 +88,14 @@ st.markdown("""
     .kpi-label {
         font-size: 12px;
         font-weight: 600;
-        color: #8C94A0;
+        color: #8C94A0 !important;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
     .kpi-value {
         font-size: 24px;
         font-weight: 800;
-        color: #1A1D20;
+        color: #1A1D20 !important;
         margin-top: 4px;
     }
     .kpi-badge {
@@ -107,44 +104,29 @@ st.markdown("""
         font-size: 14px;
         font-weight: 700;
     }
-    .badge-yellow {
-        background: #FFB800;
-        color: #FFFFFF;
-    }
-    .badge-dark {
-        background: #1E2229;
-        color: #FFFFFF;
-    }
-    .badge-orange {
-        background: #FF7A00;
-        color: #FFFFFF;
-    }
-    .badge-purple {
-        background: #6C5CE7;
-        color: #FFFFFF;
-    }
+    .badge-yellow { background: #FFB800; color: #FFFFFF; }
+    .badge-dark { background: #1E2229; color: #FFFFFF; }
+    .badge-orange { background: #FF7A00; color: #FFFFFF; }
+    .badge-purple { background: #6C5CE7; color: #FFFFFF; }
 
-    /* Estilo de Contenedor para cada Gráfico (Tarjetas de la Matriz) */
+    /* Tarjetas de Gráficos */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #FFFFFF;
+        background-color: #FFFFFF !important;
         border-radius: 22px !important;
         border: 1px solid #ECEFF2 !important;
-        box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.02) !important;
-        padding: 8px !important;
+        box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.03) !important;
+        padding: 12px !important;
     }
 
-    /* Pestañas estilizadas */
     button[data-baseweb="tab"] {
         font-weight: 700;
         color: #7A828A;
-        border-radius: 12px 12px 0 0;
     }
     button[aria-selected="true"] {
         color: #1A1D20 !important;
         border-bottom-color: #FFB800 !important;
     }
 
-    /* Botón Refrescar y Botón Guardar */
     div.stButton > button:first-child {
         background: #FFB800;
         color: #FFFFFF;
@@ -163,7 +145,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Paleta cromática corporativa inspirada en el template
 PALETA_COLORES = ["#FFB800", "#1E2229", "#FF7A00", "#6C5CE7", "#00B894", "#E17055"]
 
 # --- 3. FUNCIONES DE LIMPIEZA Y AUTENTICACIÓN ---
@@ -355,7 +336,7 @@ tab_dash, tab_edit = st.tabs(["📊 Dashboard Ejecutivo", "✏️ Editor de Dato
 
 with tab_dash:
     # --- FILTROS EN SIDEBAR ---
-    st.sidebar.markdown("<h3 style='color:#1A1D20; font-weight:800;'>Filtros de Control</h3>", unsafe_allow_html=True)
+    st.sidebar.markdown("<h3 style='color:#FFFFFF; font-weight:800;'>Filtros de Control</h3>", unsafe_allow_html=True)
     
     ciudades = ["Todas"] + sorted([c for c in df["ciudad"].dropna().unique().tolist() if str(c).strip()]) if "ciudad" in df.columns else ["Todas"]
     ciudad_sel = st.sidebar.selectbox("Ciudad:", ciudades)
@@ -371,7 +352,7 @@ with tab_dash:
         st.cache_data.clear()
         st.rerun()
 
-    # Aplicar filtros
+    # Filtrar
     df_f = df.copy()
     if ciudad_sel != "Todas" and "ciudad" in df_f.columns:
         df_f = df_f[df_f["ciudad"] == ciudad_sel]
@@ -380,13 +361,13 @@ with tab_dash:
     if estado_sel != "Todos" and "estado" in df_f.columns:
         df_f = df_f[df_f["estado"] == estado_sel]
 
-    # Cálculos para KPIs
+    # Cálculos KPIs
     total_ventas = float(df_f["total_venta"].sum())
     total_unidades = int(df_f["cantidad"].sum())
     num_ordenes = len(df_f)
     ticket_medio = (total_ventas / num_ordenes) if num_ordenes > 0 else 0.0
 
-    # --- KPI CARDS ESTILO PÍLDORA (Como el diseño compartido) ---
+    # Tarjetas KPI
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f"""
@@ -432,32 +413,52 @@ with tab_dash:
     st.write("")
 
     # ========================================================
-    # --- MATRIZ 3X2 DE GRÁFICOS PERSONALIZADOS ---
+    # --- FUNCIÓN DE ESTILO (TEXTOS Y EJES 100% VISIBLES) ---
     # ========================================================
-
-    # Función auxiliar para aplicar el estilo limpio de Plotly
     def estilizar_figura(fig, titulo=""):
         fig.update_layout(
+            template="plotly_white",
             title=dict(
                 text=f"<b>{titulo}</b>",
                 font=dict(size=14, color="#1A1D20", family="Plus Jakarta Sans"),
-                x=0.03,
+                x=0.02,
                 y=0.95
             ),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=20, r=20, t=50, b=20),
-            font=dict(family="Plus Jakarta Sans", color="#5A626A", size=11),
+            paper_bgcolor="#FFFFFF",
+            plot_bgcolor="#FFFFFF",
+            margin=dict(l=25, r=35, t=55, b=35),
+            font=dict(family="Plus Jakarta Sans", color="#1A1D20", size=12),
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
                 y=1.02,
                 xanchor="right",
                 x=1,
-                font=dict(size=10)
+                font=dict(size=11, color="#1A1D20")
             )
         )
+        # Forzar color visible oscuro en ejes
+        fig.update_xaxes(
+            tickfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans"),
+            title_font=dict(color="#1A1D20", size=12, family="Plus Jakarta Sans"),
+            gridcolor="#F0F2F5",
+            zeroline=False,
+            showline=True,
+            linecolor="#E2E8F0"
+        )
+        fig.update_yaxes(
+            tickfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans"),
+            title_font=dict(color="#1A1D20", size=12, family="Plus Jakarta Sans"),
+            gridcolor="#F0F2F5",
+            zeroline=False,
+            showline=True,
+            linecolor="#E2E8F0"
+        )
         return fig
+
+    # ========================================================
+    # --- MATRIZ 3X2 DE GRÁFICOS PERSONALIZADOS ---
+    # ========================================================
 
     # --- FILA 1 ---
     r1_c1, r1_c2 = st.columns(2)
@@ -465,7 +466,7 @@ with tab_dash:
     with r1_c1:
         with st.container(border=True):
             if len(df_f) > 0:
-                # SECCIÓN 1: DISPERSIÓN MULTIDIMENSIONAL
+                # 1. DISPERSIÓN MULTIDIMENSIONAL
                 fig_disp = px.scatter(
                     df_f,
                     x="cantidad",
@@ -477,22 +478,20 @@ with tab_dash:
                     color_discrete_sequence=PALETA_COLORES,
                     size_max=32,
                     labels={
-                        "cantidad": "Unidades",
+                        "cantidad": "Unidades por Orden",
                         "precio_unitario": "Precio Unitario ($)",
                         "categoria": "Categoría",
                         "total_venta": "Monto Total ($)"
                     }
                 )
                 fig_disp = estilizar_figura(fig_disp, "1. Dispersión Multidimensional (Precio vs Volumen)")
-                fig_disp.update_xaxes(showgrid=True, gridcolor="#F0F2F5", zeroline=False)
-                fig_disp.update_yaxes(showgrid=True, gridcolor="#F0F2F5", zeroline=False)
-                st.plotly_chart(fig_disp, width="stretch")
+                st.plotly_chart(fig_disp, width="stretch", theme=None)
             else:
                 st.info("Sin registros.")
 
     with r1_c2:
         with st.container(border=True):
-            # SECCIÓN 2: VENTAS POR CATEGORÍA (Barras horizontales redondeadas)
+            # 2. FACTURACIÓN POR CATEGORÍA CON NÚMEROS VISIBLES
             if "categoria" in df_f.columns and len(df_f) > 0:
                 v_cat = df_f.groupby("categoria", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=True)
                 fig_cat = px.bar(
@@ -500,14 +499,21 @@ with tab_dash:
                     x="total_venta",
                     y="categoria",
                     orientation="h",
+                    text="total_venta",
                     color_discrete_sequence=["#FFB800"],
-                    labels={"total_venta": "Total ($)", "categoria": ""}
+                    labels={"total_venta": "Total Facturado ($)", "categoria": "Categoría"}
                 )
                 fig_cat = estilizar_figura(fig_cat, "2. Facturación por Categoría de Producto")
-                fig_cat.update_traces(marker=dict(line=dict(width=0), opacity=0.95))
-                fig_cat.update_xaxes(showgrid=True, gridcolor="#F0F2F5")
-                fig_cat.update_yaxes(showgrid=False)
-                st.plotly_chart(fig_cat, width="stretch")
+                # Etiquetas numéricas visibles sobre cada barra
+                fig_cat.update_traces(
+                    texttemplate='$%{text:,.2f}',
+                    textposition='outside',
+                    textfont=dict(color="#1A1D20", size=12, family="Plus Jakarta Sans")
+                )
+                # Margen extra a la derecha para que el número no se corte
+                max_val = v_cat["total_venta"].max()
+                fig_cat.update_xaxes(range=[0, max_val * 1.25])
+                st.plotly_chart(fig_cat, width="stretch", theme=None)
             else:
                 st.info("Sin registros.")
 
@@ -516,39 +522,49 @@ with tab_dash:
 
     with r2_c1:
         with st.container(border=True):
-            # SECCIÓN 3: TENDENCIA TEMPORAL (Línea suave estilo slide)
+            # 3. TENDENCIA TEMPORAL CON VALORES EN LOS PUNTOS
             if "fecha" in df_f.columns and len(df_f) > 0:
                 v_tiempo = df_f.groupby("fecha", as_index=False)["total_venta"].sum().sort_values("fecha")
                 fig_line = px.line(
                     v_tiempo,
                     x="fecha",
                     y="total_venta",
+                    text="total_venta",
                     color_discrete_sequence=["#FF7A00"],
                     markers=True,
                     labels={"total_venta": "Ingresos ($)", "fecha": "Fecha"}
                 )
                 fig_line = estilizar_figura(fig_line, "3. Tendencia Histórica de Ventas")
-                fig_line.update_traces(line=dict(width=3, shape="spline"), marker=dict(size=6, color="#1E2229"))
-                fig_line.update_xaxes(showgrid=False)
-                fig_line.update_yaxes(showgrid=True, gridcolor="#F0F2F5")
-                st.plotly_chart(fig_line, width="stretch")
+                fig_line.update_traces(
+                    line=dict(width=3, shape="spline"),
+                    marker=dict(size=7, color="#1E2229"),
+                    texttemplate='$%{text:,.0f}',
+                    textposition='top center',
+                    textfont=dict(color="#1A1D20", size=10, family="Plus Jakarta Sans")
+                )
+                st.plotly_chart(fig_line, width="stretch", theme=None)
             else:
                 st.info("Sin registros de fecha.")
 
     with r2_c2:
         with st.container(border=True):
-            # SECCIÓN 4: DISTRIBUCIÓN DE ESTADOS (Gráfico Donut)
+            # 4. DISTRIBUCIÓN POR ESTADO CON PORCENTAJES VISIBLES
             if "estado" in df_f.columns and len(df_f) > 0:
                 v_est = df_f.groupby("estado", as_index=False)["total_venta"].sum()
                 fig_donut = px.pie(
                     v_est,
                     values="total_venta",
                     names="estado",
-                    hole=0.68,
+                    hole=0.62,
                     color_discrete_sequence=["#FFB800", "#1E2229", "#FF7A00", "#6C5CE7"]
                 )
                 fig_donut = estilizar_figura(fig_donut, "4. Distribución por Estado de Orden")
-                st.plotly_chart(fig_donut, width="stretch")
+                fig_donut.update_traces(
+                    textinfo="label+percent",
+                    textfont=dict(size=12, color="#FFFFFF"),
+                    insidetextorientation="horizontal"
+                )
+                st.plotly_chart(fig_donut, width="stretch", theme=None)
             else:
                 st.info("Sin registros de estado.")
 
@@ -557,42 +573,53 @@ with tab_dash:
 
     with r3_c1:
         with st.container(border=True):
-            # SECCIÓN 5: TOP CIUDADES
+            # 5. TOP CIUDADES CON CIFRAS NUMÉRICAS
             if "ciudad" in df_f.columns and len(df_f) > 0:
                 v_ciu = df_f.groupby("ciudad", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=False).head(5)
                 fig_ciu = px.bar(
                     v_ciu,
                     x="ciudad",
                     y="total_venta",
+                    text="total_venta",
                     color="ciudad",
                     color_discrete_sequence=PALETA_COLORES,
                     labels={"total_venta": "Ingresos ($)", "ciudad": "Ciudad"}
                 )
                 fig_ciu = estilizar_figura(fig_ciu, "5. Top 5 Ciudades por Desempeño")
+                fig_ciu.update_traces(
+                    texttemplate='$%{text:,.2f}',
+                    textposition='outside',
+                    textfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans")
+                )
+                max_c = v_ciu["total_venta"].max()
+                fig_ciu.update_yaxes(range=[0, max_c * 1.22])
                 fig_ciu.update_layout(showlegend=False)
-                fig_ciu.update_yaxes(showgrid=True, gridcolor="#F0F2F5")
-                st.plotly_chart(fig_ciu, width="stretch")
+                st.plotly_chart(fig_ciu, width="stretch", theme=None)
             else:
                 st.info("Sin registros de ciudad.")
 
     with r3_c2:
         with st.container(border=True):
-            # SECCIÓN 6: UNIDADES VS TICKET MEDIO POR CATEGORÍA
+            # 6. VOLUMEN DE UNIDADES
             if "categoria" in df_f.columns and len(df_f) > 0:
-                v_comb = df_f.groupby("categoria", as_index=False).agg(
-                    total=("total_venta", "sum"),
-                    unidades=("cantidad", "sum")
-                )
+                v_comb = df_f.groupby("categoria", as_index=False)["cantidad"].sum().sort_values("cantidad", ascending=False)
                 fig_comb = px.bar(
                     v_comb,
                     x="categoria",
-                    y="unidades",
+                    y="cantidad",
+                    text="cantidad",
                     color_discrete_sequence=["#1E2229"],
-                    labels={"unidades": "Unidades Vendidas", "categoria": "Categoría"}
+                    labels={"cantidad": "Unidades Vendidas", "categoria": "Categoría"}
                 )
                 fig_comb = estilizar_figura(fig_comb, "6. Volumen de Unidades por Categoría")
-                fig_comb.update_yaxes(showgrid=True, gridcolor="#F0F2F5")
-                st.plotly_chart(fig_comb, width="stretch")
+                fig_comb.update_traces(
+                    texttemplate='%{text:,} und',
+                    textposition='outside',
+                    textfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans")
+                )
+                max_u = v_comb["cantidad"].max()
+                fig_comb.update_yaxes(range=[0, max_u * 1.22])
+                st.plotly_chart(fig_comb, width="stretch", theme=None)
             else:
                 st.info("Sin registros.")
 
