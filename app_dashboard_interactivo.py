@@ -8,15 +8,165 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import plotly.express as px
+import plotly.graph_objects as go
 
-# --- Configuración visual ---
+# --- 1. CONFIGURACIÓN VISUAL GENERAL ---
 st.set_page_config(
-    page_title="Dashboard Comercial | GlobalTech",
+    page_title="Management Dashboard | GlobalTech",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- Función de limpieza numérica ---
+# --- 2. INYECCIÓN DE ESTILO CSS (Management Dashboard - Yellow & Clean UI) ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+    /* Fuente global y fondo general de la app */
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    
+    .stApp {
+        background-color: #F5F7FA;
+    }
+
+    /* Reducir espacio superior */
+    .block-container {
+        padding-top: 1.8rem;
+        padding-bottom: 2.5rem;
+    }
+
+    /* Ocultar barra superior y marca de agua */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* Banner de Encabezado Superior */
+    .dashboard-header {
+        background: #FFFFFF;
+        padding: 22px 28px;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        border: 1px solid #ECEFF2;
+        box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.03);
+    }
+    .dashboard-title-box h1 {
+        font-size: 26px;
+        font-weight: 800;
+        color: #1A1D20;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+    .dashboard-title-box span {
+        color: #FFB800;
+    }
+    .dashboard-subtitle {
+        color: #7A828A;
+        font-size: 13px;
+        font-weight: 500;
+        margin-top: 4px;
+    }
+
+    /* Tarjetas KPI con diseño tipo píldora */
+    .kpi-card {
+        background: #FFFFFF;
+        padding: 18px 20px;
+        border-radius: 20px;
+        border: 1px solid #ECEFF2;
+        box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.03);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 15px;
+    }
+    .kpi-info {
+        display: flex;
+        flex-direction: column;
+    }
+    .kpi-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #8C94A0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .kpi-value {
+        font-size: 24px;
+        font-weight: 800;
+        color: #1A1D20;
+        margin-top: 4px;
+    }
+    .kpi-badge {
+        padding: 8px 16px;
+        border-radius: 30px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    .badge-yellow {
+        background: #FFB800;
+        color: #FFFFFF;
+    }
+    .badge-dark {
+        background: #1E2229;
+        color: #FFFFFF;
+    }
+    .badge-orange {
+        background: #FF7A00;
+        color: #FFFFFF;
+    }
+    .badge-purple {
+        background: #6C5CE7;
+        color: #FFFFFF;
+    }
+
+    /* Estilo de Contenedor para cada Gráfico (Tarjetas de la Matriz) */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #FFFFFF;
+        border-radius: 22px !important;
+        border: 1px solid #ECEFF2 !important;
+        box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.02) !important;
+        padding: 8px !important;
+    }
+
+    /* Pestañas estilizadas */
+    button[data-baseweb="tab"] {
+        font-weight: 700;
+        color: #7A828A;
+        border-radius: 12px 12px 0 0;
+    }
+    button[aria-selected="true"] {
+        color: #1A1D20 !important;
+        border-bottom-color: #FFB800 !important;
+    }
+
+    /* Botón Refrescar y Botón Guardar */
+    div.stButton > button:first-child {
+        background: #FFB800;
+        color: #FFFFFF;
+        font-weight: 700;
+        border: none;
+        border-radius: 14px;
+        padding: 10px 24px;
+        transition: all 0.2s ease;
+    }
+    div.stButton > button:first-child:hover {
+        background: #E5A600;
+        color: #FFFFFF;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 184, 0, 0.35);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Paleta cromática corporativa inspirada en el template
+PALETA_COLORES = ["#FFB800", "#1E2229", "#FF7A00", "#6C5CE7", "#00B894", "#E17055"]
+
+# --- 3. FUNCIONES DE LIMPIEZA Y AUTENTICACIÓN ---
 def clean_val(v):
     if pd.isna(v) or v is None:
         return 0.0
@@ -39,20 +189,16 @@ def clean_val(v):
     except Exception:
         return 0.0
 
-# --- 1. Autenticación con Google Drive ---
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 @st.cache_resource
 def get_drive_service():
-    """Inicializa el cliente de Google Drive."""
     creds_dict = dict(st.secrets["gcp_service_account"])
     creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return build('drive', 'v3', credentials=creds)
 
-# --- 2. Descargar datos desde Google Drive ---
 @st.cache_data(ttl=60)
 def load_data_from_drive(file_id):
-    """Descarga el Excel en memoria."""
     service = get_drive_service()
     request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
     fh = io.BytesIO()
@@ -62,7 +208,6 @@ def load_data_from_drive(file_id):
         _, done = downloader.next_chunk()
     fh.seek(0)
     
-    # Cargar pestaña 'Ventas'
     try:
         df = pd.read_excel(fh, sheet_name="Ventas", engine='openpyxl')
     except Exception:
@@ -89,17 +234,13 @@ def load_data_from_drive(file_id):
     else:
         df['total_venta'] = 0.0
         
-    # Recalcular si vino vacío por ser fórmula
     mask = (df['total_venta'] == 0)
     df.loc[mask, 'total_venta'] = df.loc[mask, 'cantidad'] * df.loc[mask, 'precio_unitario']
     
     return df
 
-# --- 3. Subir y guardar datos preservando diseño, pestañas y fórmulas ---
 def save_data_to_drive(file_id, df_to_save):
-    """Actualiza el Excel conservando formato, estilos, anchos de columna y fórmulas."""
     service = get_drive_service()
-    
     request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
     fh = io.BytesIO()
     downloader = MediaIoBaseDownload(fh, request)
@@ -123,8 +264,8 @@ def save_data_to_drive(file_id, df_to_save):
     cols = ["id_transaccion", "fecha", "cliente", "ciudad", "categoria", "producto", "cantidad", "precio_unitario", "total_venta", "estado"]
     ws.append(cols)
 
-    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E2229", end_color="1E2229", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFB800")
     header_alignment = Alignment(horizontal="center", vertical="center")
 
     for col_idx in range(1, len(cols) + 1):
@@ -189,33 +330,33 @@ def save_data_to_drive(file_id, df_to_save):
         supportsAllDrives=True
     ).execute()
 
-# --- 4. Encabezado de la App ---
-col_title, col_btn = st.columns([5, 1])
-with col_title:
-    st.title("📈 Panel de Ventas en Vivo")
-    st.caption("Conectado bidireccionalmente a Google Drive (base_datos_ventas.xlsx)")
-
-with col_btn:
-    st.write("")
-    if st.button("🔄 Refrescar", help="Descarga los datos más recientes de Drive"):
-        st.cache_data.clear()
-        st.rerun()
-
+# --- 4. CARGA DE DATOS ---
 FILE_ID = st.secrets["drive_settings"]["file_id"]
 
 try:
-    with st.spinner("Cargando datos desde Google Drive..."):
+    with st.spinner("Conectando con Google Drive..."):
         df = load_data_from_drive(FILE_ID)
 except Exception as e:
     st.error(f"Error al conectar con Google Drive: {e}")
     st.stop()
 
-# --- 5. Pestañas: Dashboard Visual vs Editor Interactivo ---
-tab_dash, tab_edit = st.tabs(["📊 Dashboard y Reportes", "✏️ Editor de Base de Datos"])
+# --- 5. ENCABEZADO SUPERIOR TIPO BANNER ---
+st.markdown("""
+<div class="dashboard-header">
+    <div class="dashboard-title-box">
+        <h1>MANAGEMENT <span>Dashboard.</span></h1>
+        <div class="dashboard-subtitle">GlobalTech BI • Executive Performance & Commercial Intelligence</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Pestañas principales
+tab_dash, tab_edit = st.tabs(["📊 Dashboard Ejecutivo", "✏️ Editor de Datos"])
 
 with tab_dash:
-    st.sidebar.header("🔍 Filtros de Consulta")
-
+    # --- FILTROS EN SIDEBAR ---
+    st.sidebar.markdown("<h3 style='color:#1A1D20; font-weight:800;'>Filtros de Control</h3>", unsafe_allow_html=True)
+    
     ciudades = ["Todas"] + sorted([c for c in df["ciudad"].dropna().unique().tolist() if str(c).strip()]) if "ciudad" in df.columns else ["Todas"]
     ciudad_sel = st.sidebar.selectbox("Ciudad:", ciudades)
 
@@ -223,8 +364,14 @@ with tab_dash:
     cat_sel = st.sidebar.selectbox("Categoría:", categorias)
 
     estados = ["Todos"] + sorted([c for c in df["estado"].dropna().unique().tolist() if str(c).strip()]) if "estado" in df.columns else ["Todos"]
-    estado_sel = st.sidebar.selectbox("Estado de orden:", estados)
+    estado_sel = st.sidebar.selectbox("Estado de Orden:", estados)
 
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🔄 Actualizar Datos", help="Recarga el libro en memoria desde Google Drive"):
+        st.cache_data.clear()
+        st.rerun()
+
+    # Aplicar filtros
     df_f = df.copy()
     if ciudad_sel != "Todas" and "ciudad" in df_f.columns:
         df_f = df_f[df_f["ciudad"] == ciudad_sel]
@@ -233,108 +380,229 @@ with tab_dash:
     if estado_sel != "Todos" and "estado" in df_f.columns:
         df_f = df_f[df_f["estado"] == estado_sel]
 
-    # KPIs superiores
-    k1, k2, k3, k4 = st.columns(4)
+    # Cálculos para KPIs
     total_ventas = float(df_f["total_venta"].sum())
     total_unidades = int(df_f["cantidad"].sum())
     num_ordenes = len(df_f)
     ticket_medio = (total_ventas / num_ordenes) if num_ordenes > 0 else 0.0
 
-    k1.metric("Ingresos Totales", f"${total_ventas:,.2f}")
-    k2.metric("Unidades Vendidas", f"{total_unidades:,}")
-    k3.metric("Ticket Promedio", f"${ticket_medio:,.2f}")
-    k4.metric("Nº de Órdenes", num_ordenes)
+    # --- KPI CARDS ESTILO PÍLDORA (Como el diseño compartido) ---
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.markdown(f"""
+        <div class="kpi-card">
+            <div class="kpi-info">
+                <span class="kpi-label">Ingresos Totales</span>
+                <span class="kpi-value">${total_ventas:,.2f}</span>
+            </div>
+            <div class="kpi-badge badge-yellow">Ventas</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with k2:
+        st.markdown(f"""
+        <div class="kpi-card">
+            <div class="kpi-info">
+                <span class="kpi-label">Unidades Totales</span>
+                <span class="kpi-value">{total_unidades:,}</span>
+            </div>
+            <div class="kpi-badge badge-dark">Items</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with k3:
+        st.markdown(f"""
+        <div class="kpi-card">
+            <div class="kpi-info">
+                <span class="kpi-label">Ticket Promedio</span>
+                <span class="kpi-value">${ticket_medio:,.2f}</span>
+            </div>
+            <div class="kpi-badge badge-orange">Promedio</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with k4:
+        st.markdown(f"""
+        <div class="kpi-card">
+            <div class="kpi-info">
+                <span class="kpi-label">Total Órdenes</span>
+                <span class="kpi-value">{num_ordenes:,}</span>
+            </div>
+            <div class="kpi-badge badge-purple">Órdenes</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.write("")
 
     # ========================================================
-    # --- MATRIZ DE 6 GRÁFICOS (3 FILAS X 2 COLUMNAS) ---
+    # --- MATRIZ 3X2 DE GRÁFICOS PERSONALIZADOS ---
     # ========================================================
+
+    # Función auxiliar para aplicar el estilo limpio de Plotly
+    def estilizar_figura(fig, titulo=""):
+        fig.update_layout(
+            title=dict(
+                text=f"<b>{titulo}</b>",
+                font=dict(size=14, color="#1A1D20", family="Plus Jakarta Sans"),
+                x=0.03,
+                y=0.95
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=20, r=20, t=50, b=20),
+            font=dict(family="Plus Jakarta Sans", color="#5A626A", size=11),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                font=dict(size=10)
+            )
+        )
+        return fig
 
     # --- FILA 1 ---
-    f1_col1, f1_col2 = st.columns(2)
+    r1_c1, r1_c2 = st.columns(2)
 
-    with f1_col1:
-        st.subheader("1. Dispersión Multidimensional")
-        if len(df_f) > 0:
-            # Gráfico multidimensional:
-            # X: Cantidad | Y: Precio Unitario | Tamaño: Total Venta | Color: Categoría | Hover: Producto y Cliente
-            fig_multi = px.scatter(
-                df_f,
-                x="cantidad",
-                y="precio_unitario",
-                size="total_venta",
-                color="categoria" if "categoria" in df_f.columns else None,
-                hover_name="producto" if "producto" in df_f.columns else None,
-                hover_data=["cliente", "total_venta"] if "cliente" in df_f.columns else ["total_venta"],
-                size_max=35,
-                title="Relación Cantidad vs Precio (Tamaño: Monto Total)",
-                labels={
-                    "cantidad": "Unidades por Orden",
-                    "precio_unitario": "Precio Unitario ($)",
-                    "categoria": "Categoría",
-                    "total_venta": "Venta Total ($)"
-                }
-            )
-            fig_multi.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10))
-            st.plotly_chart(fig_multi, width="stretch")
-        else:
-            st.info("Sin datos para renderizar la dispersión.")
+    with r1_c1:
+        with st.container(border=True):
+            if len(df_f) > 0:
+                # SECCIÓN 1: DISPERSIÓN MULTIDIMENSIONAL
+                fig_disp = px.scatter(
+                    df_f,
+                    x="cantidad",
+                    y="precio_unitario",
+                    size="total_venta",
+                    color="categoria" if "categoria" in df_f.columns else None,
+                    hover_name="producto" if "producto" in df_f.columns else None,
+                    hover_data=["cliente", "total_venta"] if "cliente" in df_f.columns else ["total_venta"],
+                    color_discrete_sequence=PALETA_COLORES,
+                    size_max=32,
+                    labels={
+                        "cantidad": "Unidades",
+                        "precio_unitario": "Precio Unitario ($)",
+                        "categoria": "Categoría",
+                        "total_venta": "Monto Total ($)"
+                    }
+                )
+                fig_disp = estilizar_figura(fig_disp, "1. Dispersión Multidimensional (Precio vs Volumen)")
+                fig_disp.update_xaxes(showgrid=True, gridcolor="#F0F2F5", zeroline=False)
+                fig_disp.update_yaxes(showgrid=True, gridcolor="#F0F2F5", zeroline=False)
+                st.plotly_chart(fig_disp, width="stretch")
+            else:
+                st.info("Sin registros.")
 
-    with f1_col2:
-        st.subheader("2. Ventas por Categoría")
-        if "categoria" in df_f.columns and len(df_f) > 0:
-            ventas_cat = df_f.groupby("categoria", as_index=False)["total_venta"].sum()
-            fig_cat = px.bar(
-                ventas_cat,
-                x="categoria",
-                y="total_venta",
-                text_auto=".2s",
-                labels={"total_venta": "Ingresos ($)", "categoria": "Categoría"}
-            )
-            fig_cat.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10))
-            st.plotly_chart(fig_cat, width="stretch")
-        else:
-            st.info("Sin datos para mostrar.")
+    with r1_c2:
+        with st.container(border=True):
+            # SECCIÓN 2: VENTAS POR CATEGORÍA (Barras horizontales redondeadas)
+            if "categoria" in df_f.columns and len(df_f) > 0:
+                v_cat = df_f.groupby("categoria", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=True)
+                fig_cat = px.bar(
+                    v_cat,
+                    x="total_venta",
+                    y="categoria",
+                    orientation="h",
+                    color_discrete_sequence=["#FFB800"],
+                    labels={"total_venta": "Total ($)", "categoria": ""}
+                )
+                fig_cat = estilizar_figura(fig_cat, "2. Facturación por Categoría de Producto")
+                fig_cat.update_traces(marker=dict(line=dict(width=0), opacity=0.95))
+                fig_cat.update_xaxes(showgrid=True, gridcolor="#F0F2F5")
+                fig_cat.update_yaxes(showgrid=False)
+                st.plotly_chart(fig_cat, width="stretch")
+            else:
+                st.info("Sin registros.")
 
     # --- FILA 2 ---
-    f2_col1, f2_col2 = st.columns(2)
+    r2_c1, r2_c2 = st.columns(2)
 
-    with f2_col1:
-        st.subheader("3. Ventas por Ciudad")
-        if "ciudad" in df_f.columns and len(df_f) > 0:
-            ventas_ciudad = df_f.groupby("ciudad", as_index=False)["total_venta"].sum()
-            fig_ciudad = px.bar(
-                ventas_ciudad,
-                x="ciudad",
-                y="total_venta",
-                color="ciudad",
-                labels={"total_venta": "Ingresos ($)", "ciudad": "Ciudad"}
-            )
-            fig_ciudad.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10), showlegend=False)
-            st.plotly_chart(fig_ciudad, width="stretch")
-        else:
-            st.info("Sin datos para mostrar.")
+    with r2_c1:
+        with st.container(border=True):
+            # SECCIÓN 3: TENDENCIA TEMPORAL (Línea suave estilo slide)
+            if "fecha" in df_f.columns and len(df_f) > 0:
+                v_tiempo = df_f.groupby("fecha", as_index=False)["total_venta"].sum().sort_values("fecha")
+                fig_line = px.line(
+                    v_tiempo,
+                    x="fecha",
+                    y="total_venta",
+                    color_discrete_sequence=["#FF7A00"],
+                    markers=True,
+                    labels={"total_venta": "Ingresos ($)", "fecha": "Fecha"}
+                )
+                fig_line = estilizar_figura(fig_line, "3. Tendencia Histórica de Ventas")
+                fig_line.update_traces(line=dict(width=3, shape="spline"), marker=dict(size=6, color="#1E2229"))
+                fig_line.update_xaxes(showgrid=False)
+                fig_line.update_yaxes(showgrid=True, gridcolor="#F0F2F5")
+                st.plotly_chart(fig_line, width="stretch")
+            else:
+                st.info("Sin registros de fecha.")
 
-    with f2_col2:
-        st.subheader("4. Gráfico de Sección 4")
-        st.info("Espacio disponible para tu cuarto gráfico (ej. Tendencia temporal o Top Clientes).")
+    with r2_c2:
+        with st.container(border=True):
+            # SECCIÓN 4: DISTRIBUCIÓN DE ESTADOS (Gráfico Donut)
+            if "estado" in df_f.columns and len(df_f) > 0:
+                v_est = df_f.groupby("estado", as_index=False)["total_venta"].sum()
+                fig_donut = px.pie(
+                    v_est,
+                    values="total_venta",
+                    names="estado",
+                    hole=0.68,
+                    color_discrete_sequence=["#FFB800", "#1E2229", "#FF7A00", "#6C5CE7"]
+                )
+                fig_donut = estilizar_figura(fig_donut, "4. Distribución por Estado de Orden")
+                st.plotly_chart(fig_donut, width="stretch")
+            else:
+                st.info("Sin registros de estado.")
 
     # --- FILA 3 ---
-    f3_col1, f3_col2 = st.columns(2)
+    r3_c1, r3_c2 = st.columns(2)
 
-    with f3_col1:
-        st.subheader("5. Gráfico de Sección 5")
-        st.info("Espacio disponible para tu quinto gráfico (ej. Distribución por Estado de orden).")
+    with r3_c1:
+        with st.container(border=True):
+            # SECCIÓN 5: TOP CIUDADES
+            if "ciudad" in df_f.columns and len(df_f) > 0:
+                v_ciu = df_f.groupby("ciudad", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=False).head(5)
+                fig_ciu = px.bar(
+                    v_ciu,
+                    x="ciudad",
+                    y="total_venta",
+                    color="ciudad",
+                    color_discrete_sequence=PALETA_COLORES,
+                    labels={"total_venta": "Ingresos ($)", "ciudad": "Ciudad"}
+                )
+                fig_ciu = estilizar_figura(fig_ciu, "5. Top 5 Ciudades por Desempeño")
+                fig_ciu.update_layout(showlegend=False)
+                fig_ciu.update_yaxes(showgrid=True, gridcolor="#F0F2F5")
+                st.plotly_chart(fig_ciu, width="stretch")
+            else:
+                st.info("Sin registros de ciudad.")
 
-    with f3_col2:
-        st.subheader("6. Gráfico de Sección 6")
-        st.info("Espacio disponible para tu sexto gráfico (ej. Matriz de rendimiento o Pareto).")
-
+    with r3_c2:
+        with st.container(border=True):
+            # SECCIÓN 6: UNIDADES VS TICKET MEDIO POR CATEGORÍA
+            if "categoria" in df_f.columns and len(df_f) > 0:
+                v_comb = df_f.groupby("categoria", as_index=False).agg(
+                    total=("total_venta", "sum"),
+                    unidades=("cantidad", "sum")
+                )
+                fig_comb = px.bar(
+                    v_comb,
+                    x="categoria",
+                    y="unidades",
+                    color_discrete_sequence=["#1E2229"],
+                    labels={"unidades": "Unidades Vendidas", "categoria": "Categoría"}
+                )
+                fig_comb = estilizar_figura(fig_comb, "6. Volumen de Unidades por Categoría")
+                fig_comb.update_yaxes(showgrid=True, gridcolor="#F0F2F5")
+                st.plotly_chart(fig_comb, width="stretch")
+            else:
+                st.info("Sin registros.")
 
 with tab_edit:
-    st.subheader("📝 Edición directa en la Base de Datos")
-    st.caption("Modifica celdas haciendo doble clic. La columna 'total_venta' se calcula sola en Excel mediante fórmula `=G*H`.")
+    st.markdown("""
+    <div style='background: white; padding: 20px; border-radius: 18px; border: 1px solid #ECEFF2; margin-bottom: 20px;'>
+        <h3 style='margin:0; color:#1A1D20; font-weight:800;'>Editor Directo en Base de Datos</h3>
+        <p style='color:#7A828A; font-size:13px; margin-top:4px;'>Modifica valores en la tabla. Las fórmulas se calculan automáticamente al guardar.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     df_editado = st.data_editor(
         df,
@@ -346,9 +614,9 @@ with tab_edit:
     
     if st.button("💾 Guardar cambios en Google Drive", type="primary"):
         try:
-            with st.spinner("Guardando y formateando en Google Drive..."):
+            with st.spinner("Guardando en Google Drive..."):
                 save_data_to_drive(FILE_ID, df_editado)
-            st.success("¡Base de datos actualizada con formato profesional y fórmulas en Google Drive!")
+            st.success("¡Base de datos actualizada correctamente en Google Drive!")
             st.cache_data.clear()
             st.rerun()
         except Exception as e:
