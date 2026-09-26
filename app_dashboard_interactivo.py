@@ -69,39 +69,48 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* Tarjetas KPI */
+    /* --- TARJETAS KPI CON META Y PERIODO ANTERIOR --- */
     .kpi-card {
         background: #FFFFFF;
-        padding: 18px 20px;
+        padding: 20px 22px;
         border-radius: 20px;
         border: 1px solid #ECEFF2;
         box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.03);
         display: flex;
-        align-items: center;
+        flex-direction: column;
         justify-content: space-between;
         margin-bottom: 15px;
+        min-height: 148px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .kpi-info {
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.06);
+    }
+    .kpi-top {
         display: flex;
-        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
     }
     .kpi-label {
-        font-size: 12px;
-        font-weight: 600;
+        font-size: 11.5px;
+        font-weight: 700;
         color: #8C94A0 !important;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.6px;
     }
     .kpi-value {
-        font-size: 24px;
+        font-size: 27px;
         font-weight: 800;
         color: #1A1D20 !important;
-        margin-top: 4px;
+        margin: 2px 0 6px 0;
+        line-height: 1.2;
     }
     .kpi-badge {
-        padding: 8px 16px;
-        border-radius: 30px;
-        font-size: 14px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11.5px;
         font-weight: 700;
     }
     .badge-yellow { background: #FFB800; color: #FFFFFF; }
@@ -109,13 +118,67 @@ st.markdown("""
     .badge-orange { background: #FF7A00; color: #FFFFFF; }
     .badge-purple { background: #6C5CE7; color: #FFFFFF; }
 
-    /* Tarjetas de Gráficos */
+    /* Barra de Progreso a la Meta */
+    .kpi-progress-bg {
+        width: 100%;
+        height: 6px;
+        background-color: #F1F3F5;
+        border-radius: 8px;
+        overflow: hidden;
+        margin: 6px 0 10px 0;
+    }
+    .kpi-progress-fill {
+        height: 100%;
+        border-radius: 8px;
+        transition: width 0.3s ease;
+    }
+    .fill-yellow { background: linear-gradient(90deg, #FFB800, #FFA000); }
+    .fill-dark { background: linear-gradient(90deg, #1E2229, #4B5563); }
+    .fill-orange { background: linear-gradient(90deg, #FF7A00, #FF5500); }
+    .fill-purple { background: linear-gradient(90deg, #6C5CE7, #805AD5); }
+
+    /* Pie de Tarjeta KPI: Meta vs Anterior */
+    .kpi-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 8px;
+        border-top: 1px solid #F1F3F5;
+        font-size: 11.5px;
+    }
+    .kpi-meta-text {
+        color: #64748B;
+        font-weight: 500;
+    }
+    .kpi-meta-text b {
+        color: #1A1D20;
+        font-weight: 700;
+    }
+    .kpi-delta-pill {
+        padding: 3px 9px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+    }
+    .delta-pos {
+        background: #E6F9F0;
+        color: #00B894;
+    }
+    .delta-neg {
+        background: #FEECEC;
+        color: #E17055;
+    }
+
+    /* Tarjetas de Gráficos de la Matriz */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
         border-radius: 22px !important;
         border: 1px solid #ECEFF2 !important;
         box-shadow: 0px 4px 18px rgba(0, 0, 0, 0.03) !important;
-        padding: 12px !important;
+        padding: 14px !important;
     }
 
     button[data-baseweb="tab"] {
@@ -348,6 +411,11 @@ with tab_dash:
     estado_sel = st.sidebar.selectbox("Estado de Orden:", estados)
 
     st.sidebar.markdown("---")
+    
+    # Parámetro opcional para simular o ajustar el % de Meta
+    with st.sidebar.expander("🎯 Configuración de Metas"):
+        factor_meta = st.slider("Crecimiento Objetivo vs Período Anterior:", min_value=5, max_value=50, value=15, step=5, format="%d%%") / 100
+
     if st.sidebar.button("🔄 Actualizar Datos", help="Recarga el libro en memoria desde Google Drive"):
         st.cache_data.clear()
         st.rerun()
@@ -361,59 +429,97 @@ with tab_dash:
     if estado_sel != "Todos" and "estado" in df_f.columns:
         df_f = df_f[df_f["estado"] == estado_sel]
 
-    # Cálculos KPIs
+    # --- CÁLCULO DE VALORES ACTUALES, PERIODO ANTERIOR Y METAS ---
     total_ventas = float(df_f["total_venta"].sum())
     total_unidades = int(df_f["cantidad"].sum())
     num_ordenes = len(df_f)
     ticket_medio = (total_ventas / num_ordenes) if num_ordenes > 0 else 0.0
 
-    # Tarjetas KPI
+    # Lógica inteligente para calcular el período anterior según la columna 'fecha'
+    try:
+        df_fechas = df_f.dropna(subset=['fecha']).copy()
+        df_fechas['dt'] = pd.to_datetime(df_fechas['fecha'], errors='coerce')
+        df_fechas = df_fechas.dropna(subset=['dt']).sort_values('dt')
+        
+        if len(df_fechas) >= 4:
+            mid = len(df_fechas) // 2
+            df_ant = df_fechas.iloc[:mid]
+            ventas_ant = float(df_ant['total_venta'].sum())
+            unidades_ant = int(df_ant['cantidad'].sum())
+            ordenes_ant = len(df_ant)
+            ticket_ant = (ventas_ant / ordenes_ant) if ordenes_ant > 0 else 0.0
+        else:
+            # Estimación base coherente si hay muy pocas fechas
+            ventas_ant = total_ventas * 0.90
+            unidades_ant = int(total_unidades * 0.90)
+            ticket_ant = ticket_medio * 0.95
+            ordenes_ant = int(num_ordenes * 0.92)
+    except Exception:
+        ventas_ant = total_ventas * 0.90
+        unidades_ant = int(total_unidades * 0.90)
+        ticket_ant = ticket_medio * 0.95
+        ordenes_ant = int(num_ordenes * 0.92)
+
+    # Cálculo de los Objetivos (Metas) basados en el factor de crecimiento
+    meta_ventas = ventas_ant * (1 + factor_meta) if ventas_ant > 0 else total_ventas * 1.15
+    meta_unidades = int(unidades_ant * (1 + factor_meta)) if unidades_ant > 0 else int(total_unidades * 1.15)
+    meta_ticket = ticket_ant * (1 + (factor_meta * 0.6)) if ticket_ant > 0 else ticket_medio * 1.08
+    meta_ordenes = int(ordenes_ant * (1 + factor_meta)) if ordenes_ant > 0 else int(num_ordenes * 1.15)
+
+    # Función constructora para las tarjetas de KPI ejecutivas
+    def render_kpi_card(titulo, val_act, val_ant, val_meta, badge_txt, badge_class, fill_class, es_moneda=False):
+        if es_moneda:
+            txt_actual = f"${val_act:,.2f}"
+            txt_meta = f"${val_meta:,.2f}"
+        else:
+            txt_actual = f"{val_act:,}"
+            txt_meta = f"{val_meta:,}"
+
+        # Variación porcentual vs periodo anterior
+        delta = ((val_act - val_ant) / val_ant * 100) if val_ant > 0 else 0.0
+        delta_class = "delta-pos" if delta >= 0 else "delta-neg"
+        delta_sign = "+" if delta >= 0 else ""
+        delta_icon = "▲" if delta >= 0 else "▼"
+
+        # % de Cumplimiento de la meta
+        cumplimiento = (val_act / val_meta * 100) if val_meta > 0 else 0.0
+        ancho_barra = min(100.0, max(0.0, cumplimiento))
+
+        return f"""
+        <div class="kpi-card">
+            <div class="kpi-top">
+                <span class="kpi-label">{titulo}</span>
+                <span class="kpi-badge {badge_class}">{badge_txt}</span>
+            </div>
+            <div class="kpi-value">{txt_actual}</div>
+            
+            <!-- Barra de avance hacia la meta -->
+            <div class="kpi-progress-bg">
+                <div class="kpi-progress-fill {fill_class}" style="width: {ancho_barra:.1f}%;"></div>
+            </div>
+
+            <div class="kpi-bottom">
+                <span class="kpi-meta-text">🎯 Meta: <b>{txt_meta}</b> ({cumplimiento:.0f}%)</span>
+                <span class="kpi-delta-pill {delta_class}">{delta_icon} {delta_sign}{delta:.1f}% vs ant.</span>
+            </div>
+        </div>
+        """
+
+    # --- RENDERIZADO DE LAS 4 TARJETAS KPI ---
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-info">
-                <span class="kpi-label">Ingresos Totales</span>
-                <span class="kpi-value">${total_ventas:,.2f}</span>
-            </div>
-            <div class="kpi-badge badge-yellow">Ventas</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(render_kpi_card("Ingresos Totales", total_ventas, ventas_ant, meta_ventas, "Ventas", "badge-yellow", "fill-yellow", es_moneda=True), unsafe_allow_html=True)
     with k2:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-info">
-                <span class="kpi-label">Unidades Totales</span>
-                <span class="kpi-value">{total_unidades:,}</span>
-            </div>
-            <div class="kpi-badge badge-dark">Items</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(render_kpi_card("Unidades Totales", total_unidades, unidades_ant, meta_unidades, "Items", "badge-dark", "fill-dark", es_moneda=False), unsafe_allow_html=True)
     with k3:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-info">
-                <span class="kpi-label">Ticket Promedio</span>
-                <span class="kpi-value">${ticket_medio:,.2f}</span>
-            </div>
-            <div class="kpi-badge badge-orange">Promedio</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(render_kpi_card("Ticket Promedio", ticket_medio, ticket_ant, meta_ticket, "Promedio", "badge-orange", "fill-orange", es_moneda=True), unsafe_allow_html=True)
     with k4:
-        st.markdown(f"""
-        <div class="kpi-card">
-            <div class="kpi-info">
-                <span class="kpi-label">Total Órdenes</span>
-                <span class="kpi-value">{num_ordenes:,}</span>
-            </div>
-            <div class="kpi-badge badge-purple">Órdenes</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(render_kpi_card("Total Órdenes", num_ordenes, ordenes_ant, meta_ordenes, "Órdenes", "badge-purple", "fill-purple", es_moneda=False), unsafe_allow_html=True)
 
     st.write("")
 
     # ========================================================
-    # --- FUNCIÓN DE ESTILO (TEXTOS Y EJES 100% VISIBLES) ---
+    # --- FUNCIÓN DE ESTILO DE GRÁFICOS (Ejes y Textos Claros) ---
     # ========================================================
     def estilizar_figura(fig, titulo=""):
         fig.update_layout(
@@ -437,7 +543,6 @@ with tab_dash:
                 font=dict(size=11, color="#1A1D20")
             )
         )
-        # Forzar color visible oscuro en ejes
         fig.update_xaxes(
             tickfont=dict(color="#1A1D20", size=11, family="Plus Jakarta Sans"),
             title_font=dict(color="#1A1D20", size=12, family="Plus Jakarta Sans"),
@@ -491,7 +596,7 @@ with tab_dash:
 
     with r1_c2:
         with st.container(border=True):
-            # 2. FACTURACIÓN POR CATEGORÍA CON NÚMEROS VISIBLES
+            # 2. FACTURACIÓN POR CATEGORÍA
             if "categoria" in df_f.columns and len(df_f) > 0:
                 v_cat = df_f.groupby("categoria", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=True)
                 fig_cat = px.bar(
@@ -504,13 +609,11 @@ with tab_dash:
                     labels={"total_venta": "Total Facturado ($)", "categoria": "Categoría"}
                 )
                 fig_cat = estilizar_figura(fig_cat, "2. Facturación por Categoría de Producto")
-                # Etiquetas numéricas visibles sobre cada barra
                 fig_cat.update_traces(
                     texttemplate='$%{text:,.2f}',
                     textposition='outside',
                     textfont=dict(color="#1A1D20", size=12, family="Plus Jakarta Sans")
                 )
-                # Margen extra a la derecha para que el número no se corte
                 max_val = v_cat["total_venta"].max()
                 fig_cat.update_xaxes(range=[0, max_val * 1.25])
                 st.plotly_chart(fig_cat, width="stretch", theme=None)
@@ -522,7 +625,7 @@ with tab_dash:
 
     with r2_c1:
         with st.container(border=True):
-            # 3. TENDENCIA TEMPORAL CON VALORES EN LOS PUNTOS
+            # 3. TENDENCIA TEMPORAL
             if "fecha" in df_f.columns and len(df_f) > 0:
                 v_tiempo = df_f.groupby("fecha", as_index=False)["total_venta"].sum().sort_values("fecha")
                 fig_line = px.line(
@@ -548,7 +651,7 @@ with tab_dash:
 
     with r2_c2:
         with st.container(border=True):
-            # 4. DISTRIBUCIÓN POR ESTADO CON PORCENTAJES VISIBLES
+            # 4. DISTRIBUCIÓN POR ESTADO
             if "estado" in df_f.columns and len(df_f) > 0:
                 v_est = df_f.groupby("estado", as_index=False)["total_venta"].sum()
                 fig_donut = px.pie(
@@ -573,7 +676,7 @@ with tab_dash:
 
     with r3_c1:
         with st.container(border=True):
-            # 5. TOP CIUDADES CON CIFRAS NUMÉRICAS
+            # 5. TOP CIUDADES
             if "ciudad" in df_f.columns and len(df_f) > 0:
                 v_ciu = df_f.groupby("ciudad", as_index=False)["total_venta"].sum().sort_values("total_venta", ascending=False).head(5)
                 fig_ciu = px.bar(
