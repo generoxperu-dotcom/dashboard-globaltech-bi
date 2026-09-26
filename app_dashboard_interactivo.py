@@ -10,7 +10,7 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import plotly.express as px
 import plotly.graph_objects as go
 
-# --- 1. CONFIGURACIÓN VISUAL GENERAL (Debe ser el primer comando Streamlit) ---
+# --- 1. CONFIGURACIÓN VISUAL GENERAL ---
 st.set_page_config(
     page_title="Management Dashboard | GlobalTech",
     page_icon="📊",
@@ -45,7 +45,7 @@ def clean_val(v):
         return 0.0
 
 def render_kpi_card(titulo, val_act, val_ant, val_meta, badge_txt, badge_class, fill_class, es_moneda=False):
-    """Genera el HTML compacto de las tarjetas KPI sin sangrías para evitar la caja negra."""
+    """Genera el HTML compacto de las tarjetas KPI sin sangrías conflictivas."""
     if es_moneda:
         txt_actual = f"${val_act:,.2f}"
         txt_meta = f"${val_meta:,.2f}"
@@ -79,7 +79,7 @@ def render_kpi_card(titulo, val_act, val_ant, val_meta, badge_txt, badge_class, 
     )
 
 def estilizar_figura(fig, titulo=""):
-    """Aplica formato de alto contraste con ejes y números oscuros siempre visibles."""
+    """Configura los gráficos con tipografía limpia y ejes oscuros de alto contraste."""
     fig.update_layout(
         template="plotly_white",
         title=dict(
@@ -137,9 +137,34 @@ st.markdown("""
         padding-bottom: 2.5rem;
     }
 
+    /* Ocultar marcas y menús innecesarios sin romper la barra de herramientas */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+
+    /* Asegurar que el botón de reapertura de la barra lateral (Sidebar) sea visible y elegante */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+    }
+    button[data-testid="stSidebarCollapsedControl"],
+    div[data-testid="stSidebarCollapsedControl"] button {
+        background-color: #FFFFFF !important;
+        color: #1A1D20 !important;
+        border: 1px solid #ECEFF2 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08) !important;
+        margin-left: 12px !important;
+        margin-top: 10px !important;
+        visibility: visible !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease !important;
+    }
+    button[data-testid="stSidebarCollapsedControl"]:hover,
+    div[data-testid="stSidebarCollapsedControl"] button:hover {
+        background-color: #FFB800 !important;
+        color: #FFFFFF !important;
+    }
 
     /* Banner Superior */
     .dashboard-header {
